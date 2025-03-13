@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main  # Исправлен синтаксис для указания ветки
+      - master
 
 jobs:
   build:
