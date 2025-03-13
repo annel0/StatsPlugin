@@ -1,11 +1,8 @@
-name: Сборка
-
+name: Демонстрация GitVerse CI/CD
 on:
   push:
-    branches: [main]
-
 jobs:
-  build:
+  build-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
