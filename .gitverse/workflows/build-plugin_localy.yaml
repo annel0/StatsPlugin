@@ -1,8 +1,10 @@
-on: 
-  - push: *
+name: Демонстрация GitVerse CI/CD
+on:
+  push:
 jobs:
-  build:
-    # runs-on: ubuntu-latest
+  build-test:
+    name: CICD branch protection
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout кода
         uses: actions/checkout@v4
