@@ -2,7 +2,7 @@ on:
   - push: *
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # runs-on: ubuntu-latest
     steps:
       - name: Checkout кода
         uses: actions/checkout@v4
