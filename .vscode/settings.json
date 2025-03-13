@@ -1,7 +1,0 @@
-{
-    "java.compile.nullAnalysis.mode": "automatic",
-    "java.configuration.updateBuildConfiguration": "interactive",
-    "yaml.schemas": {
-        "https://json.schemastore.org/paper-plugin.json": "file:///home/coder/workspace/src/main/resources/plugin.yml"
-    }
-}
