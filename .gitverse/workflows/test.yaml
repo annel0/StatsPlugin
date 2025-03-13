@@ -13,10 +13,18 @@ jobs:
       #     distribution: 'temurin'
       # - name: Сборка
       #   run: ./gradlew build
+      - name: Генерация случайного тега
+        run: |
+          echo "TAG_NAME=random-$(date +%s)-$RANDOM" >> $GITHUB_ENV
+          echo ${{ env.TAG_NAME }}
+      - name: Создание тега
+        run: |
+          git tag ${{ env.TAG_NAME }}
+          git push origin ${{ env.TAG_NAME }}
       - name: Создание релиза
         uses: softprops/action-gh-release@v2
         with:
-          tag: ${{ github.ref_name }}  # Использует имя тега из текущего коммита
+          tag: ${{ env.TAG_NAME }}  # Использует имя тега из текущего коммита
           files: build/libs/*.jar
           body: "Автоматический релиз для коммита ${{ github.sha }}"
           draft: false
