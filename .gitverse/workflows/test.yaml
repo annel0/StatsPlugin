@@ -13,3 +13,14 @@ jobs:
           distribution: 'temurin'
       - name: Сборка
         run: ./gradlew build
+      - name: Создание релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
+          body: Автоматический релиз для коммита ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITVERSE }}
+      - name: Проверка выходных файлов
+        run: ls -la build/libs
