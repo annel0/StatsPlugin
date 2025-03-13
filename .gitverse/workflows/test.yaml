@@ -15,7 +15,7 @@ jobs:
       #   run: ./gradlew build
       - name: Генерация случайного тега
         run: |
-          echo "random-$(date +%s)-$RANDOM" >> $TAG_NAME
+          export TAG_NAME="random-$(date +%s)-$RANDOM"
           echo $TAG_NAME
       - name: Создание тега
         run: |
