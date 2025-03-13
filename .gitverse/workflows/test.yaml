@@ -1,4 +1,4 @@
-name: Демонстрация GitVerse CI/CD
+# name: Демонстрация GitVerse CI/CD
 on:
   push:
 jobs:
