@@ -2,8 +2,8 @@
 import java.text.SimpleDateFormat
 
 plugins {
-    id 'checkstyle'
-    id "com.github.spotbugs" version "6.1.6"
+    // id 'checkstyle'
+    // id "com.github.spotbugs" version "6.1.6"
     id 'com.gradleup.shadow' version '8.3.6'
     id 'java'
 }
@@ -68,7 +68,7 @@ dependencies {
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.2'
     implementation 'io.papermc:paperlib:1.0.8'
     implementation 'org.mariadb.jdbc:mariadb-java-client:3.3.0' // Добавлено для работы с MariaDB
-    spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0'
+    // spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0'
     testCompileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.2'
     testImplementation 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.0'
@@ -89,36 +89,36 @@ processResources {
     }
 }
 
-checkstyle {
-    toolVersion '10.20.1'
-    maxWarnings = 0
-}
+// checkstyle {
+//     toolVersion '10.20.1'
+//     maxWarnings = 0
+// }
 
-configurations.checkstyle {
-    resolutionStrategy.capabilitiesResolution.withCapability("com.google.collections:google-collections") {
-        select("com.google.guava:guava:23.0")
-    }
-}
+// configurations.checkstyle {
+//     resolutionStrategy.capabilitiesResolution.withCapability("com.google.collections:google-collections") {
+//         select("com.google.guava:guava:23.0")
+//     }
+// }
 
-tasks.withType(Checkstyle).configureEach {
-    // Отключить Checkstyle для всех задач
-    enabled = false // TODO: Remove 
+// tasks.withType(Checkstyle).configureEach {
+//     // Отключить Checkstyle для всех задач
+//     enabled = false // TODO: Remove 
 
-    reports {
-        xml.required = false
-        html.required = true
-    }
-}
+//     // reports {
+//     //     xml.required = false
+//     //     html.required = true
+//     // }
+// }
 
-tasks.withType(SpotBugsTask).configureEach {
-    enabled = false
-    // reports.create("html") {
-    //     required = true
-    // }
-    // reports.create("xml") {
-    //     required = false
-    // }
-}
+// tasks.withType(SpotBugsTask).configureEach {
+//     enabled = false
+//     // reports.create("html") {
+//     //     required = true
+//     // }
+//     // reports.create("xml") {
+//     //     required = false
+//     // }
+// }
 
 shadowJar {
     archiveClassifier.set('')
