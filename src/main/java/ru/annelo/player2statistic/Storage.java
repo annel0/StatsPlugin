@@ -42,7 +42,9 @@ class FileStorage implements IStorage {
 
             // Если директория не существует, создаем её
             if (!dataFolder.exists()) {
-                dataFolder.mkdirs();
+                if (!dataFolder.mkdirs()) {
+                    Bukkit.getLogger().severe("Не удалось создать директорию для сохранения статистики!");
+                }
             }
 
             // Создаем конфигурацию

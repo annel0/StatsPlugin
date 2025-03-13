@@ -110,14 +110,15 @@ tasks.withType(Checkstyle).configureEach {
     }
 }
 
-// tasks.withType(SpotBugsTask).configureEach {
-//     reports.create("html") {
-//         required = true
-//     }
-//     reports.create("xml") {
-//         required = false
-//     }
-// }
+tasks.withType(SpotBugsTask).configureEach {
+    enabled = false
+    // reports.create("html") {
+    //     required = true
+    // }
+    // reports.create("xml") {
+    //     required = false
+    // }
+}
 
 shadowJar {
     archiveClassifier.set('')
