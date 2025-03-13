@@ -63,7 +63,7 @@ storage:
     ```bash  
     /stats saveall  
     ```  
-  *(TODO. Добавьте её в код, если нужно.)*  
+  *(TODO.)*  
 
 ---
 
