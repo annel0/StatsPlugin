@@ -1,6 +1,6 @@
 name: Сборка плагина Minecraft
 on:
-  push: null
+  push:
 jobs:
   build-test:
     runs-on: ubuntu-latest
