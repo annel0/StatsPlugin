@@ -28,20 +28,18 @@ public class StatsPlugin extends JavaPlugin {
         // Инициализация системы хранения
         String storageType = getConfig().getString("storage.type", "file");
         if ("database".equalsIgnoreCase(storageType)) {
-            storage = new DatabaseStorage(
-                getConfig().getString("database.host", "localhost"),
-                getConfig().getInt("database.port", 3306),
-                getConfig().getString("database.name", "minecraft_stats"),
-                getConfig().getString("database.user", "root"),
-                getConfig().getString("database.password", "")
-            );
+            storage = new DatabaseStorage(getConfig().getString("database.host", "localhost"),
+                    getConfig().getInt("database.port", 3306),
+                    getConfig().getString("database.name", "minecraft_stats"),
+                    getConfig().getString("database.user", "root"),
+                    getConfig().getString("database.password", ""));
         } else {
             storage = new FileStorage(this);
         }
 
         // Регистрация обработчиков событий
         getServer().getPluginManager().registerEvents(new StatsListener(storage), this);
-        
+
         // Загрузка данных при старте сервера
         storage.loadAllPlayers();
     }
@@ -54,6 +52,7 @@ public class StatsPlugin extends JavaPlugin {
         }
     }
 }
+
 
 // Обработчик игровых событий
 class StatsListener implements Listener {
@@ -127,7 +126,8 @@ class StatsListener implements Listener {
             }
         }
 
-        if (event.getClickedBlock() != null && event.getClickedBlock().getType() == Material.CHEST) {
+        if (event.getClickedBlock() != null
+                && event.getClickedBlock().getType() == Material.CHEST) {
             stats.setChestsOpened(stats.getChestsOpened() + 1);
             storage.savePlayerStats(stats);
         }

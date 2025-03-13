@@ -103,4 +103,3 @@ class PlayerStats {
         this.messagesSent = messagesSent;
     }
 }
-
