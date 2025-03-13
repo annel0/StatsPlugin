@@ -6,18 +6,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Установка JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: "21"
-          distribution: 'temurin'
-      - name: Сборка
-        run: ./gradlew build
+      # - name: Установка JDK
+      #   uses: actions/setup-java@v4
+      #   with:
+      #     java-version: "21"
+      #     distribution: 'temurin'
+      # - name: Сборка
+      #   run: ./gradlew build
       - name: Создание релиза
         uses: softprops/action-gh-release@v2
         with:
+          tag: ${{ github.ref_name }}  # Использует имя тега из текущего коммита
           files: build/libs/*.jar
-          body: Автоматический релиз для коммита ${{ github.sha }}
+          body: "Автоматический релиз для коммита ${{ github.sha }}"
           draft: false
           prerelease: false
         env:
