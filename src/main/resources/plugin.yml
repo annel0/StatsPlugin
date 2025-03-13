@@ -1,7 +1,7 @@
 main: ru.annelo.StatisticPlugin
 name: StatisticPlugin
 version: "${VERSION}"
-api-version: "1.21.1"
+api-version: "1.21"
 author: AUTHOR
 description: DESCRIPTION
 commands:
