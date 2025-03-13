@@ -24,7 +24,7 @@ jobs:
       - name: Создание релиза
         uses: softprops/action-gh-release@v2
         with:
-          tag: $TAG_NAME  # Использует имя тега из текущего коммита
+          tag: test-1 # $TAG_NAME  # Использует имя тега из текущего коммита
           files: build/libs/*.jar
           body: "Автоматический релиз для коммита ${{ github.sha }}"
           draft: false
