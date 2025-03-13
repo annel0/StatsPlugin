@@ -1,7 +1,6 @@
-name: Сборка плагина Minecraft (Новый файл Yaml)
 on: [push]
 jobs:
-  build-test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout кода
