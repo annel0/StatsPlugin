@@ -2,13 +2,9 @@ name: Сборка плагина Minecraft
 
 on:
   push:
-    branches:
-      - main
-      - development-branch
+    branches: [ '*' ]  # Сборка при любом коммите в любую ветку
   pull_request:
-    branches:
-      - main
-      - development-branch
+    branches: [ '*' ]
 
 jobs:
   build:
