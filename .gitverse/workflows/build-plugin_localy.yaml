@@ -28,14 +28,14 @@ jobs:
         run: ./gradlew checkstyleMain
       - name: Проверка SpotBugs
         run: ./gradlew spotbugsMain
-      - name: Создание релиза
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/libs/*.jar
-          body: Автоматический релиз для коммита ${{ github.sha }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITVERSE }}
-      - name: Проверка выходных файлов
-        run: ls -la build/libs
+      # - name: Создание релиза
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: build/libs/*.jar
+      #     body: Автоматический релиз для коммита ${{ github.sha }}
+      #     draft: false
+      #     prerelease: false
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITVERSE }}
+      # - name: Проверка выходных файлов
+      #   run: ls -la build/libs
