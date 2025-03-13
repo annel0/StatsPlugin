@@ -1,6 +1,5 @@
-name: Сборка плагина Minecraft
-on:
-  push:
+name: Сборка плагина Minecraft (Новый файл Yaml)
+on: [push]
 jobs:
   build-test:
     runs-on: ubuntu-latest
