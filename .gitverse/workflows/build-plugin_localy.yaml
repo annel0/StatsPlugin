@@ -13,15 +13,15 @@ jobs:
         with:
           java-version: "21"
           distribution: temurin
-      - name: Кэширование зависимостей Gradle
-        uses: actions/cache@v4
-        with:
-          paths:
-            - ~/.gradle/caches
-            - ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/build.gradle', '**/gradle.properties') }}
-          restore-keys:
-            - ${{ runner.os }}-gradle-
+      # - name: Кэширование зависимостей Gradle
+      #   uses: actions/cache@v4
+      #   with:
+      #     paths:
+      #       - ~/.gradle/caches
+      #       - ~/.gradle/wrapper
+      #     key: ${{ runner.os }}-gradle-${{ hashFiles('**/build.gradle', '**/gradle.properties') }}
+      #     restore-keys:
+      #       - ${{ runner.os }}-gradle-
       - name: Проверка Gradle
         run: gradle --version
       - name: Сборка
@@ -30,14 +30,14 @@ jobs:
         run: ./gradlew checkstyleMain
       - name: Проверка SpotBugs
         run: ./gradlew spotbugsMain
-      # - name: Создание релиза
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     files: build/libs/*.jar
-      #     body: Автоматический релиз для коммита ${{ github.sha }}
-      #     draft: false
-      #     prerelease: false
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITVERSE }}
-      # - name: Проверка выходных файлов
-      #   run: ls -la build/libs
+      - name: Создание релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
+          body: Автоматический релиз для коммита ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITVERSE }}
+      - name: Проверка выходных файлов
+        run: ls -la build/libs
