@@ -13,15 +13,15 @@ jobs:
         with:
           java-version: "21"
           distribution: temurin
-      # - name: Кэширование зависимостей Gradle
-      #   uses: actions/cache@v4
-      #   with:
-      #     paths:
-      #       - ~/.gradle/caches
-      #       - ~/.gradle/wrapper
-      #     key: ${{ runner.os }}-gradle-${{ hashFiles('**/build.gradle', '**/gradle.properties') }}
-      #     restore-keys:
-      #       - ${{ runner.os }}-gradle-
+      - name: Кэширование зависимостей Gradle
+        uses: actions/cache@v4
+        with:
+          paths:
+            - ~/.gradle/caches
+            - ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/build.gradle', '**/gradle.properties') }}
+          restore-keys:
+            - ${{ runner.os }}-gradle-
       - name: Проверка Gradle
         run: gradle --version
       - name: Сборка
