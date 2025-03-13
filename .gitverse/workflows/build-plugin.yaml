@@ -1,0 +1,61 @@
+name: Сборка плагина Minecraft
+
+on:
+  push:
+    branches:
+      - main
+      - development-branch
+  pull_request:
+    branches:
+      - main
+      - development-branch
+
+jobs:
+  build:
+    name: Сборка плагина
+    runs-on: ubuntu-latest
+
+    steps:
+      # Шаг 1: Checkout репозитория
+      - name: Checkout репозитория
+        uses: actions/checkout@v4
+
+      # Шаг 2: Установка Java Development Kit (JDK)
+      - name: Установка JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # Шаг 3: Кэширование зависимостей Gradle
+      - name: Кэширование зависимостей Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Шаг 4: Сборка проекта с помощью Gradle
+      - name: Сборка плагина
+        run: ./gradlew clean build --no-daemon
+
+      # Шаг 5: Запуск проверок Checkstyle
+      - name: Проверка Checkstyle
+        run: ./gradlew checkstyleMain
+
+      # Шаг 6: Запуск проверок SpotBugs
+      - name: Проверка SpotBugs
+        run: ./gradlew spotbugsMain
+
+      # Шаг 7: Создание релиза и добавление JAR-файла
+      - name: Создание релиза
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/libs/*.jar
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
