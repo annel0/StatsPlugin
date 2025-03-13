@@ -1,4 +1,4 @@
-import com.github.spotbugs.snom.SpotBugsTask
+// import com.github.spotbugs.snom.SpotBugsTask
 import java.text.SimpleDateFormat
 
 plugins {
@@ -8,7 +8,7 @@ plugins {
     id 'java'
 }
 
-group = "com.crimsonwarpedcraft.exampleplugin"
+group = "ru.annelo.StatisticPlugin"
 
 static def getTime() {
     SimpleDateFormat sdf = new SimpleDateFormat("yyMMdd-HHmm")
@@ -67,6 +67,7 @@ dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
     implementation 'io.papermc:paperlib:1.0.8'
+    implementation 'org.mariadb.jdbc:mariadb-java-client:3.3.0' // Добавлено для работы с MariaDB
     spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0'
     testCompileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
     testImplementation 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
@@ -80,7 +81,11 @@ test {
 
 processResources {
     filesMatching("**/plugin.yml") {
-        expand ( NAME: rootProject.name, VERSION: version, PACKAGE: project.group.toString() )
+        expand (
+            NAME: rootProject.name,
+            VERSION: version,
+            PACKAGE: project.group.toString()
+        )
     }
 }
 
@@ -102,14 +107,14 @@ tasks.withType(Checkstyle).configureEach {
     }
 }
 
-tasks.withType(SpotBugsTask).configureEach {
-    reports.create("html") {
-        required = true
-    }
-    reports.create("xml") {
-        required = false
-    }
-}
+// tasks.withType(SpotBugsTask).configureEach {
+//     reports.create("html") {
+//         required = true
+//     }
+//     reports.create("xml") {
+//         required = false
+//     }
+// }
 
 shadowJar {
     archiveClassifier.set('')

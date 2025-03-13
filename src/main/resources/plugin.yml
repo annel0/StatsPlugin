@@ -1,5 +1,5 @@
-main: ${PACKAGE}.${NAME}
-name: ${NAME}
+main: ru.annelo.StatisticPlugin
+name: StatisticPlugin
 version: "${VERSION}"
 api-version: "1.16"
 author: AUTHOR
@@ -8,13 +8,3 @@ commands:
   ex:
     description: Base command for EXAMPLE
     usage: "For a list of commands, type /ex help"
-    aliases: example
-permissions:
-  example.test:
-    description: DESCRIPTION
-    default: true
-  example.*:
-    description: Grants all other permissions
-    default: false
-    children:
-      example.test: true
