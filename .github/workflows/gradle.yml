@@ -1,0 +1,32 @@
+# name: Сборка и сохранение артефакта
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Клонирование репозитория
+        uses: actions/checkout@v3
+
+      - name: Установка JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: "21"
+          distribution: 'temurin'
+
+      - name: Сборка проекта
+        run: ./gradlew build
+
+      - name: Проверка выходных файлов
+        run: |
+          ls -la build/libs
+          
+      - name: Сохранение артефакта
+        uses: actions/upload-artifact@v4  # Используем v3 для совместимости
+        with:
+          name: plugin-release  # Имя артефакта
+          path: build/libs/*.jar  # Путь к JAR-файлу
