@@ -30,17 +30,25 @@ public class StatsPlugin extends JavaPlugin {
         config = new Config(this);
 
         // Инициализация системы хранения
-        storage = config.isDatabase() ? 
-                    new DatabaseStorage(
-                        config.getDatabaseHost(),
-                        config.getDatabasePort(),
-                        config.getDatabaseName(),
-                        config.getDatabaseUsername(),
-                        config.getDatabasePassword()) : 
-                    new FileStorage(this);
+        storage =
+                config.isDatabase()
+                        ? new DatabaseStorage(config.getDatabaseHost(), config.getDatabasePort(),
+                                config.getDatabaseName(), config.getDatabaseUsername(),
+                                config.getDatabasePassword())
+                        : new FileStorage(this);
 
         // Регистрация обработчиков событий
         getServer().getPluginManager().registerEvents(new StatsListener(storage, config), this);
+
+        // Регистрация команды
+        getCommand("stats").setExecutor(new StatsCommand(storage, config));
+
+        // Запуск автосохранения
+        if (config.isAutosaveEnabled()) {
+            getServer().getScheduler().runTaskTimer(this, () -> {
+                storage.saveAllPlayers();
+            }, 0, config.getAutosaveInterval() * 20 * 60); // Интервал в тиках (20 тиков = 1 сек)
+        }
 
         // Загрузка данных при старте сервера
         storage.loadAllPlayers();
@@ -74,14 +82,16 @@ class StatsListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (!config.isEnablePlayTime()) return;
+        if (!config.isEnablePlayTime())
+            return;
         // Запуск таймера игрового времени
         playTimeMap.put(event.getPlayer().getUniqueId(), System.currentTimeMillis());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        if (!config.isEnablePlayTime()) return;
+        if (!config.isEnablePlayTime())
+            return;
         // Сохранение игрового времени и других данных
         UUID uuid = event.getPlayer().getUniqueId();
         if (playTimeMap.containsKey(uuid)) {
@@ -95,7 +105,8 @@ class StatsListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onEntityDeath(EntityDeathEvent event) {
-        if (!config.isEnableKills()) return;
+        if (!config.isEnableKills())
+            return;
 
         if (event.getEntity().getKiller() instanceof Player) {
             // Увеличение счетчика убитых мобов
@@ -108,7 +119,8 @@ class StatsListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerChat(AsyncChatEvent event) {
-        if (!config.isEnableKills()) return;
+        if (!config.isEnableKills())
+            return;
 
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
@@ -118,7 +130,8 @@ class StatsListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerMove(PlayerMoveEvent event) {
-        if (!config.isEnableDistance()) return;
+        if (!config.isEnableDistance())
+            return;
 
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
@@ -131,30 +144,29 @@ class StatsListener implements Listener {
     public void onPlayerInteract(PlayerInteractEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
-        
+
         // Проверка на правый клик и едимость предмета
         if (event.getAction().name().contains("RIGHT_CLICK")) {
             ItemStack item = event.getItem();
-            if (item != null 
-                && utils.edibleMaterials.contains(item.getType())
-                && config.isEnableFoodConsumption()) {
-                    stats.setItemsEaten(stats.getItemsEaten() + 1);
-                    storage.savePlayerStats(stats);
+            if (item != null && constants.edibleMaterials.contains(item.getType())
+                    && config.isEnableFoodConsumption()) {
+                stats.setItemsEaten(stats.getItemsEaten() + 1);
+                storage.savePlayerStats(stats);
             }
         }
 
         // Проверка на открытие сундука
-        if (event.getClickedBlock() != null
-            && event.getClickedBlock().getType() == Material.CHEST
-            && config.isEnableChestOpening()) {
-                stats.setChestsOpened(stats.getChestsOpened() + 1);
-                storage.savePlayerStats(stats);
+        if (event.getClickedBlock() != null && event.getClickedBlock().getType() == Material.CHEST
+                && config.isEnableChestOpening()) {
+            stats.setChestsOpened(stats.getChestsOpened() + 1);
+            storage.savePlayerStats(stats);
         }
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerBreakBlock(BlockBreakEvent event) {
-        if (!config.isEnableBlockBreaking()) return;
+        if (!config.isEnableBlockBreaking())
+            return;
 
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);

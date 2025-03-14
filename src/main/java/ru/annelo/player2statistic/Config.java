@@ -60,7 +60,7 @@ public class Config {
     }
 
     // Сохранение изменений в файле
-    public void saveConfig(String file_name){
+    public void saveConfig(String file_name) {
         try {
             config.save(file_name);
         } catch (Exception e) {
@@ -69,30 +69,21 @@ public class Config {
     }
 
     // Сохранение изменений в файле config.yml
-    public void saveConfig(){
+    public void saveConfig() {
         try {
             config.save("config.yml");
         } catch (Exception e) {
             logger.severe("Ошибка сохранения файла config.yml");
         }
     }
-/*
- * # Настройки дополнительных функций
-features:
-  # Включение сбора статистики перемещений
-  movementTracking: true
-  # Включение сбора статистики разрушения блоков
-  blockBreaking: true
-  # Включение сбора статистики взаимодействия с объектами
-  objectInteraction: true
-  # Включение сбора статистики открытия сундуков
-  chestOpening: true
-  # Включение сбора статистики употребления пищи
-  foodConsumption: true
-  # Включение сбора статистики убийств мобов
-  mobKilling: true
-
- */
+    /*
+     * # Настройки дополнительных функций features: # Включение сбора статистики перемещений
+     * movementTracking: true # Включение сбора статистики разрушения блоков blockBreaking: true #
+     * Включение сбора статистики открытия сундуков chestOpening: true # Включение сбора статистики
+     * употребления пищи foodConsumption: true # Включение сбора статистики убийств мобов
+     * mobKilling: true
+     * 
+     */
 
     public boolean isEnablePlayTime() {
         return isFeatureEnabled("playTime");

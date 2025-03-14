@@ -102,9 +102,4 @@ class PlayerStats {
     public void setMessagesSent(int messagesSent) {
         this.messagesSent = messagesSent;
     }
-
-    public void setPlayerName(String name) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setPlayerName'");
-    }
 }
