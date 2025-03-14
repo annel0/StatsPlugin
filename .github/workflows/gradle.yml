@@ -31,7 +31,7 @@ jobs:
           fi
 
       - name: Сохранение артефакта
-        uses: actions/upload-artifact@v3  # Используем v3 для совместимости
+        uses: actions/upload-artifact@v4  # Используем v3 для совместимости
         with:
           name: plugin-release  # Имя артефакта
           path: build/libs/*.jar  # Путь к JAR-файлу
