@@ -34,7 +34,8 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git tag ${TAG_NAME}
-          git push origin ${TAG_NAME}
+          # Используем личный токен для аутентификации
+          git push https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git ${TAG_NAME}
 
       - name: Создание релиза и загрузка JAR-файла
         if: startsWith(github.ref, 'refs/tags/')
