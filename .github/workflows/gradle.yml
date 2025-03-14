@@ -1,0 +1,28 @@
+# name: Демонстрация GitHub CI/CD
+on:
+  push:
+    branches:
+      - main  # Запускать workflow при пуше в ветку main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # Используем v3 для GitHub
+      - name: Установка JDK
+        uses: actions/setup-java@v4  # Используем v3 для GitHub
+        with:
+          java-version: "21"
+          distribution: 'temurin'
+      - name: Сборка
+        run: ./gradlew build
+      - name: Проверка выходных файлов
+        run: ls -la build/libs
+      - name: Архивация JAR-файла
+        run: tar -czf artifact.tar.gz build/libs/*.jar  # Создаем архив
+      - name: Создание релиза и загрузка артефакта
+        uses: softprops/action-gh-release@v4  # Используем действие для создания релиза
+        if: startsWith(github.ref, 'refs/tags/')  # Выполняется только при создании тега
+        with:
+          files: artifact.tar.gz  # Файл для загрузки
+          token: ${{ secrets.GITHUB_TOKEN }}  # Токен для авторизации
