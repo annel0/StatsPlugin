@@ -32,16 +32,14 @@ public class StatsPlugin extends JavaPlugin {
         // Инициализация системы хранения
         storage =
                 config.isDatabase()
-                        ? new DatabaseStorage(config.getDatabaseHost(), config.getDatabasePort(),
-                                config.getDatabaseName(), config.getDatabaseUsername(),
-                                config.getDatabasePassword())
+                        ? new DatabaseStorage(config)
                         : new FileStorage(this);
 
         // Регистрация обработчиков событий
         getServer().getPluginManager().registerEvents(new StatsListener(storage, config), this);
 
         // Регистрация команды
-        getCommand("stats").setExecutor(new StatsCommand(storage, config));
+        getCommand("stats").setExecutor(new StatsCommand(this, storage, config));
 
         // Запуск автосохранения
         if (config.isAutosaveEnabled()) {
@@ -60,6 +58,14 @@ public class StatsPlugin extends JavaPlugin {
         if (storage != null) {
             storage.saveAllPlayers();
         }
+    }
+    
+    public void setStorage(IStorage storage) {
+        this.storage = storage;
+    }
+
+    public IStorage getStorage() {
+        return this.storage;
     }
 }
 

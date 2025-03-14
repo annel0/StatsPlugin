@@ -5,12 +5,16 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.logging.Logger;
 
 public class Config {
-    private final FileConfiguration config;
+    private FileConfiguration config;
     private final Logger logger;
+
+    private JavaPlugin localPlugin;
 
     public Config(JavaPlugin plugin) {
         config = plugin.getConfig();
         config.options().copyDefaults(true);
+
+        localPlugin = plugin;
         logger = plugin.getLogger();
     }
 
@@ -76,14 +80,6 @@ public class Config {
             logger.severe("Ошибка сохранения файла config.yml");
         }
     }
-    /*
-     * # Настройки дополнительных функций features: # Включение сбора статистики перемещений
-     * movementTracking: true # Включение сбора статистики разрушения блоков blockBreaking: true #
-     * Включение сбора статистики открытия сундуков chestOpening: true # Включение сбора статистики
-     * употребления пищи foodConsumption: true # Включение сбора статистики убийств мобов
-     * mobKilling: true
-     * 
-     */
 
     public boolean isEnablePlayTime() {
         return isFeatureEnabled("playTime");
@@ -107,5 +103,19 @@ public class Config {
 
     public boolean isEnableBlockBreaking() {
         return isFeatureEnabled("blockBreaking");
+    }
+
+    public void reload() {
+        config = localPlugin.getConfig();
+    }
+
+    public void setDatabase(boolean isDatabase) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setDatabase'");
+    }
+
+    public void save() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'save'");
     }
 }

@@ -7,11 +7,16 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
 
 // Интерфейс для работы с хранилищем
 interface IStorage {
@@ -19,18 +24,24 @@ interface IStorage {
 
     PlayerStats loadPlayerStats(UUID uuid);
 
-    void loadAllPlayers();
+    List<PlayerStats> loadAllPlayers();
 
     void saveAllPlayers();
+
+    void reloadStorage();
+
+    void close();
+
+    List<PlayerStats> getTopStats(StatType playTime, int limit);
 }
 
 
 // Реализация локального хранилища (YAML)
 class FileStorage implements IStorage {
-    private final StatsPlugin plugin;
+    private final JavaPlugin plugin;
 
-    public FileStorage(StatsPlugin plugin) {
-        this.plugin = plugin;
+    public FileStorage(JavaPlugin plugin2) {
+        this.plugin = plugin2;
     }
 
     @Override
@@ -104,13 +115,15 @@ class FileStorage implements IStorage {
     }
 
     @Override
-    public void loadAllPlayers() {
+    public List<PlayerStats> loadAllPlayers() {
         File dataFolder = plugin.getDataFolder();
         File statsDir = new File(dataFolder, "stats");
-
+        
+        List<PlayerStats> statsList = new ArrayList<>();
+        
         if (!statsDir.exists()) {
             statsDir.mkdir();
-            return;
+            return null;
         }
 
         for (File file : statsDir.listFiles()) {
@@ -119,9 +132,12 @@ class FileStorage implements IStorage {
                 PlayerStats stats = loadPlayerStats(uuid);
                 if (stats != null) {
                     Bukkit.getLogger().info("Loaded stats for " + uuid);
+                    statsList.add(stats);
                 }
             }
         }
+
+        return statsList;
     }
 
     @Override
@@ -144,18 +160,98 @@ class FileStorage implements IStorage {
         }
     }
 
+    @Override
+    public void reloadStorage() {
+        loadAllPlayers();
+    }
+
+    @Override
+    public void close() {
+        saveAllPlayers();
+        Bukkit.getLogger().info("Saved all players' stats to YAML files.");
+    }
+
+    @Override
+    public List<PlayerStats> getTopStats(StatType statType, int limit) {
+        List<PlayerStats> statsList = loadAllPlayers();
+
+        if (statsList == null) 
+            return null;
+
+        // Фильтруем статистику по типу
+        List<PlayerStats> filteredStats = new ArrayList<>();
+        for (PlayerStats stats : statsList) {
+            switch (statType) {
+                case PLAY_TIME:
+                    if (stats.getPlayTime() > 0)
+                        filteredStats.add(stats);
+                    break;
+                case MOBS_KILLED:
+                    if (stats.getMobsKilled() > 0)
+                        filteredStats.add(stats);
+                    break;
+                case ITEMS_EATEN:
+                    if (stats.getItemsEaten() > 0)
+                        filteredStats.add(stats);
+                case DISTANCE_TRAVELED:
+                    if (stats.getDistanceTraveled() > 0)
+                        filteredStats.add(stats);
+                case BLOCKS_BROKEN:
+                    if (stats.getBlocksBroken() > 0)
+                        filteredStats.add(stats);
+                case CHEST_OPENED:
+                    if (stats.getChestsOpened() > 0)
+                        filteredStats.add(stats);
+            }
+        }
+
+        // Сортируем список по выбранному типу статистики
+        switch (statType) {
+            case PLAY_TIME:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
+                break;
+            case MOBS_KILLED:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
+                break;
+            case ITEMS_EATEN:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+            case BLOCKS_BROKEN:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
+                break;
+            case CHEST_OPENED:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
+                break;
+            case DISTANCE_TRAVELED:
+                Collections.sort(filteredStats, Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
+                break;
+            default:
+                break;
+        }
+        
+        if (limit > filteredStats.size()) {
+            return filteredStats;
+        }
+        if (limit <= 0) {
+            return filteredStats;
+        }
+
+        return filteredStats.subList(0, Math.min(filteredStats.size(), limit));
+    }
 }
 
 
 class DatabaseStorage implements IStorage {
     private Connection connection;
+    private Config config;
 
-    public DatabaseStorage(String host, int port, String database, String user, String password) {
+    public DatabaseStorage(Config config) {
+        this.config = config;
+
         try {
             // Создаем соединение
             Class.forName("org.mariadb.jdbc.Driver");
-            String url = "jdbc:mariadb://" + host + ":" + port + "/" + database;
-            connection = DriverManager.getConnection(url, user, password);
+            String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":" + config.getDatabasePort() + "/" + config.getDatabaseName();
+            connection = DriverManager.getConnection(url, config.getDatabaseUsername(), config.getDatabasePassword());
 
             // Создаем таблицу, если её нет
             PreparedStatement stmt =
@@ -249,10 +345,13 @@ class DatabaseStorage implements IStorage {
     }
 
     @Override
-    public void loadAllPlayers() {
+    public List<PlayerStats> loadAllPlayers() {
+
         try {
             PreparedStatement stmt = connection.prepareStatement("SELECT * FROM player_stats");
             ResultSet rs = stmt.executeQuery();
+
+            List<PlayerStats> statsList = new ArrayList<>();
 
             while (rs.next()) {
                 UUID uuid = UUID.fromString(rs.getString("uuid"));
@@ -268,20 +367,148 @@ class DatabaseStorage implements IStorage {
                 stats.setItemsUsed(rs.getInt("items_used"));
                 stats.setChestsOpened(rs.getInt("chests_opened"));
                 stats.setMessagesSent(rs.getInt("messages_sent"));
+
+                statsList.add(stats);
+
                 Bukkit.getLogger().info("Loaded stats for " + uuid);
             }
 
             rs.close();
             stmt.close();
+            return statsList;
         } catch (SQLException e) {
             Bukkit.getLogger().severe("Error loading all player stats");
             e.printStackTrace();
         }
+
+        return null;
     }
 
     @Override
     public void saveAllPlayers() {
         // Для базы данных сохранение всех игроков происходит автоматически при каждом
         // savePlayerStats()
+    }
+
+    @Override
+    public void reloadStorage() {
+        if (connection == null) {
+            try {
+                // Закрываем старое соединение, если оно существует
+                if (connection != null) {
+                    connection.close();
+                }
+    
+                // Создаем новое соединение
+                Class.forName("org.mariadb.jdbc.Driver");
+                String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":" + config.getDatabasePort() + "/" + config.getDatabaseName();
+                connection = DriverManager.getConnection(url, config.getDatabaseUsername(), config.getDatabasePassword());
+    
+                // Проверяем, существует ли таблица player_stats
+                PreparedStatement stmt = connection.prepareStatement(
+                        "CREATE TABLE IF NOT EXISTS player_stats ("
+                                + "uuid CHAR(36) PRIMARY KEY,"
+                                + "play_time INT,"
+                                + "mobs_killed INT,"
+                                + "items_eaten INT,"
+                                + "distance_traveled DOUBLE,"
+                                + "blocks_broken INT,"
+                                + "deaths INT,"
+                                + "items_crafted INT,"
+                                + "items_used INT,"
+                                + "chests_opened INT,"
+                                + "messages_sent INT" + ")");
+                stmt.execute();
+                stmt.close();
+    
+                Bukkit.getLogger().info("Database storage reloaded successfully.");
+            } catch (SQLException | ClassNotFoundException e) {
+                Bukkit.getLogger().severe("Error reloading database storage");
+                e.printStackTrace();
+            }
+        } else {
+            Bukkit.getLogger().info("Database storage is already active and does not need to be reloaded.");
+        }
+    }
+
+    @Override
+    public void close() {
+        saveAllPlayers();
+        try {
+            if (connection != null) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("Error closing database connection");
+            e.printStackTrace();
+        }
+        Bukkit.getLogger().info("Database storage closed successfully.");
+    }
+
+    @Override
+    public List<PlayerStats> getTopStats(StatType statType, int limit) {
+        List<PlayerStats> statsList = loadAllPlayers();
+
+        if (statsList == null) 
+            return null;
+
+        // Фильтруем статистику по типу
+        List<PlayerStats> filteredStats = new ArrayList<>();
+        for (PlayerStats stats : statsList) {
+            switch (statType) {
+                case PLAY_TIME:
+                    if (stats.getPlayTime() > 0)
+                        filteredStats.add(stats);
+                    break;
+                case MOBS_KILLED:
+                    if (stats.getMobsKilled() > 0)
+                        filteredStats.add(stats);
+                    break;
+                case ITEMS_EATEN:
+                    if (stats.getItemsEaten() > 0)
+                        filteredStats.add(stats);
+                case DISTANCE_TRAVELED:
+                    if (stats.getDistanceTraveled() > 0)
+                        filteredStats.add(stats);
+                case BLOCKS_BROKEN:
+                    if (stats.getBlocksBroken() > 0)
+                        filteredStats.add(stats);
+                case CHEST_OPENED:
+                    if (stats.getChestsOpened() > 0)
+                        filteredStats.add(stats);
+            }
+        }
+
+        // Сортируем список по выбранному типу статистики
+        switch (statType) {
+            case PLAY_TIME:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
+                break;
+            case MOBS_KILLED:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
+                break;
+            case ITEMS_EATEN:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+            case BLOCKS_BROKEN:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
+                break;
+            case CHEST_OPENED:
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
+                break;
+            case DISTANCE_TRAVELED:
+                Collections.sort(filteredStats, Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
+                break;
+            default:
+                break;
+        }
+        
+        if (limit > filteredStats.size()) {
+            return filteredStats;
+        }
+        if (limit <= 0) {
+            return filteredStats;
+        }
+
+        return filteredStats.subList(0, Math.min(filteredStats.size(), limit));
     }
 }

@@ -10,6 +10,28 @@ commands:
     usage: "/stats [player]"
     permission: player2statistic.stats
     permission-message: "У вас нет прав для использования этой команды."
+  stats.reload:
+    description: Перезагрузка конфигурации плагина.
+    usage: "/stats reload"
+    permission: player2statistic.admin
+    permission-message: "У вас нет прав для использования этой команды."
+    default: op
+
+  stats.dbtype:
+    description: Устанавливает тип базы данных.
+    usage: "/stats dbtype [mysql|file]"
+    permission: player2statistic.admin
+    permission-message: "У вас нет прав для использования этой команды."
+    default: op
+  
+  stats.top:
+    description: Отображает топ игроков по различным метрикам.
+    usage: "/stats top [metric] [limit]"
+    permission: player2statistic.admin
+    permission-message: "У вас нет прав для использования этой команды."
+    default: op
+    aliases: [ "statstop" ]
+
 permissions:
   player2statistic.stats:
     description: Разрешение на просмотр своей статистики.
