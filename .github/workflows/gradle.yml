@@ -27,15 +27,19 @@ jobs:
       - name: Проверка выходных файлов
         run: ls -la build/libs
 
-      - name: Установка GitHub CLI
-        uses: actions/install-github-cli@v3
-      
-      - name: Создание тега через gh
+      - name: Создание тега через API
+        env:
+          API_URL: "https://api.github.com"
         run: |
-          gh auth login --with-token "${{ secrets.GITHUB_TOKEN }}"
-          gh repo set-default ${{ github.repository }}
           TAG_NAME="v$(date +%Y.%m.%d)-${GITHUB_RUN_NUMBER}"
-          gh tag create $TAG_NAME -m "Auto tag"
+          COMMIT_SHA=$(git rev-parse HEAD)
+          PAYLOAD=$(jq -n --arg tag "$TAG_NAME" --arg sha "$COMMIT_SHA" \
+            '{tag: $tag, object: $sha, type: "commit", message: "Auto-created tag"}')
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "$API_URL/repos/${{ github.repository }}/git/tags" \
+            -d "$PAYLOAD"
           
       - name: Создание релиза и загрузка JAR-файла
         if: startsWith(github.ref, 'refs/tags/')
