@@ -23,7 +23,7 @@ public class StatsCommand implements CommandExecutor {
         public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
             if (sender instanceof Player) {
                 Player player = (Player) sender;
-                if (args.length > 1) {
+                if (args.length >= 1) {
                     switch (args[0]) {
                         case "player":
                             return getPlayerStats(player, args);
