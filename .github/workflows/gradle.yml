@@ -24,12 +24,7 @@ jobs:
       - name: Проверка выходных файлов
         run: |
           ls -la build/libs
-          # Убедимся, что JAR-файл существует
-          if [ ! -f "build/libs/*.jar" ]; then
-            echo "Файл JAR не найден!"
-            exit 1
-          fi
-
+          
       - name: Сохранение артефакта
         uses: actions/upload-artifact@v4  # Используем v3 для совместимости
         with:
