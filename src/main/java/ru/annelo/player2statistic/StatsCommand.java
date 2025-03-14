@@ -9,45 +9,44 @@ import net.md_5.bungee.api.ChatColor;
 
 public class StatsCommand implements CommandExecutor {
 
-        private IStorage storage;
-        private final Config config;
-        private final StatsPlugin plugin;
-        
-        public StatsCommand(StatsPlugin plugin, IStorage storage, Config config) {
-            this.storage = storage;
-            this.config = config;
-            this.plugin = plugin;
-        }
-    
-        @Override
-        public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-            if (sender instanceof Player) {
-                Player player = (Player) sender;
-                if (args.length >= 1) {
-                    switch (args[0]) {
-                        case "player":
-                            return getPlayerStats(player, args);
-                        case "reload":
-                            return reloadPlugin(player);
-                        case "dbtype":
-                            return migrateDatabase(player, args);
-                        case "top":
-                            return getTopStats(player, args);
-                        default:
-                            break;
-                    }
+    private IStorage storage;
+    private final Config config;
+    private final StatsPlugin plugin;
+
+    public StatsCommand(StatsPlugin plugin, IStorage storage, Config config) {
+        this.storage = storage;
+        this.config = config;
+        this.plugin = plugin;
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            if (args.length >= 1) {
+                switch (args[0]) {
+                    case "player":
+                        return getPlayerStats(player, args);
+                    case "reload":
+                        return reloadPlugin(player);
+                    case "dbtype":
+                        return migrateDatabase(player, args);
+                    case "top":
+                        return getTopStats(player, args);
+                    default:
+                        break;
                 }
             }
-            return false;
         }
-    
-        public boolean reloadPlugin(Player player) {
-            if (player.hasPermission("player2statistic.reload")) {
-                try {
-                    config.reload();
-                    plugin.getStorage().close();
-                    plugin.setStorage(config.isDatabase()
-                        ? new DatabaseStorage(config)
+        return false;
+    }
+
+    public boolean reloadPlugin(Player player) {
+        if (player.hasPermission("player2statistic.reload")) {
+            try {
+                config.reload();
+                plugin.getStorage().close();
+                plugin.setStorage(config.isDatabase() ? new DatabaseStorage(config)
                         : new FileStorage(plugin));
                 player.sendMessage(ChatColor.GREEN + "Плагин успешно перезагружен.");
                 return true;
@@ -75,7 +74,8 @@ public class StatsCommand implements CommandExecutor {
         }
 
         String format = config.getDisplayFormat();
-        format = format.replace("{play_time}", String.valueOf(stats.getPlayTime()))
+        format = format.replace("{player_name}", String.valueOf(stats.getPlayerName()))
+                .replace("{play_time}", String.valueOf(stats.getPlayTime()))
                 .replace("{blocks_broken}", String.valueOf(stats.getBlocksBroken()))
                 .replace("{mobs_killed}", String.valueOf(stats.getMobsKilled()))
                 .replace("{chests_opened}", String.valueOf(stats.getChestsOpened()))
@@ -92,7 +92,8 @@ public class StatsCommand implements CommandExecutor {
 
         String newDbType = args[1];
         if (!newDbType.equals("file") && !newDbType.equals("database")) {
-        player.sendMessage(ChatColor.RED + "Недопустимый тип базы данных. Используйте \"file\" или \"database\".");
+            player.sendMessage(ChatColor.RED
+                    + "Недопустимый тип базы данных. Используйте \"file\" или \"database\".");
             return false;
         }
 
@@ -103,20 +104,20 @@ public class StatsCommand implements CommandExecutor {
         }
 
         try {
-            IStorage newStorage = isDatabase
-                    ? new DatabaseStorage(config)
-                    : new FileStorage(plugin);
+            IStorage newStorage =
+                    isDatabase ? new DatabaseStorage(config) : new FileStorage(plugin);
             storage.close();
             storage = newStorage;
             config.setDatabase(isDatabase);
             config.save();
-            
+
         } catch (Exception e) {
             player.sendMessage(ChatColor.RED + "Ошибка при переключении базы данных.");
             e.printStackTrace();
             return false;
         }
-        player.sendMessage(ChatColor.GREEN + "База данных успешно переключена на " + (isDatabase ? "базу данных" : "файловую систему."));
+        player.sendMessage(ChatColor.GREEN + "База данных успешно переключена на "
+                + (isDatabase ? "базу данных" : "файловую систему."));
         return true;
     }
 
@@ -143,10 +144,12 @@ public class StatsCommand implements CommandExecutor {
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
 
-                    String playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    String playerName =
+                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
                     playerName = playerName == null ? "Неизвестный игрок" : playerName;
 
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + stats.getPlayTime() + " секунд");
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
+                            + stats.getPlayTime() + " секунд");
                 }
                 break;
             case "blocks_broken":
@@ -155,10 +158,12 @@ public class StatsCommand implements CommandExecutor {
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
 
-                    String playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    String playerName =
+                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
                     playerName = playerName == null ? "Неизвестный игрок" : playerName;
 
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + stats.getBlocksBroken() + " блоков");
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
+                            + stats.getBlocksBroken() + " блоков");
                 }
                 break;
             case "mobs_killed":
@@ -167,10 +172,12 @@ public class StatsCommand implements CommandExecutor {
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
 
-                    String playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    String playerName =
+                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
                     playerName = playerName == null ? "Неизвестный игрок" : playerName;
 
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + stats.getMobsKilled() + " мобов");
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
+                            + stats.getMobsKilled() + " мобов");
                 }
                 break;
             case "chests_opened":
@@ -179,10 +186,12 @@ public class StatsCommand implements CommandExecutor {
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
 
-                    String playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    String playerName =
+                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
                     playerName = playerName == null ? "Неизвестный игрок" : playerName;
 
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + stats.getChestsOpened() + " сундуков");
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
+                            + stats.getChestsOpened() + " сундуков");
                 }
                 break;
             case "items_eaten":
@@ -191,10 +200,12 @@ public class StatsCommand implements CommandExecutor {
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
 
-                    String playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    String playerName =
+                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
                     playerName = playerName == null ? "Неизвестный игрок" : playerName;
 
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + stats.getItemsEaten() + " еды");
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
+                            + stats.getItemsEaten() + " еды");
                 }
                 break;
             case "distance_traveled":
@@ -203,16 +214,19 @@ public class StatsCommand implements CommandExecutor {
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
 
-                    String playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    String playerName =
+                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
                     playerName = playerName == null ? "Неизвестный игрок" : playerName;
 
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + stats.getDistanceTraveled() + " метров");
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
+                            + stats.getDistanceTraveled() + " метров");
                 }
                 break;
-            
+
             default:
-                player.sendMessage(ChatColor.RED + "Неверный тип статистики. Доступные типы: play_time, blocks_broken, mobs_killed, chests_opened, items_eaten, distance_traveled");
-            
+                player.sendMessage(ChatColor.RED
+                        + "Неверный тип статистики. Доступные типы: play_time, blocks_broken, mobs_killed, chests_opened, items_eaten, distance_traveled");
+
         }
 
         return true;

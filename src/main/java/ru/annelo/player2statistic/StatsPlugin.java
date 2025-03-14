@@ -89,10 +89,15 @@ class StatsListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        PlayerStats stats = storage.loadPlayerStats(uuid);
+
+        stats.setPlayerName(event.getPlayer().getName());
+
         if (!config.isEnablePlayTime())
             return;
         // Запуск таймера игрового времени
-        playTimeMap.put(event.getPlayer().getUniqueId(), System.currentTimeMillis());
+        playTimeMap.put(uuid, System.currentTimeMillis());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

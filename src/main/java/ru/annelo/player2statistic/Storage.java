@@ -62,6 +62,7 @@ class FileStorage implements IStorage {
             // Создаем конфигурацию
             YamlConfiguration config = new YamlConfiguration();
             config.set("uuid", stats.getUuid().toString());
+            config.set("player_name", stats.getPlayerName());
             config.set("playTime", stats.getPlayTime());
             config.set("mobsKilled", stats.getMobsKilled());
             config.set("itemsEaten", stats.getItemsEaten());
@@ -99,6 +100,7 @@ class FileStorage implements IStorage {
 
             PlayerStats stats = new PlayerStats();
             stats.setUuid(UUID.fromString(config.getString("uuid")));
+            stats.setPlayerName(config.getString("player_name"));
             stats.setPlayTime(config.getInt("playTime"));
             stats.setMobsKilled(config.getInt("mobsKilled"));
             stats.setItemsEaten(config.getInt("itemsEaten"));
@@ -122,9 +124,9 @@ class FileStorage implements IStorage {
     public List<PlayerStats> loadAllPlayers() {
         File dataFolder = plugin.getDataFolder();
         File statsDir = new File(dataFolder, "stats");
-        
+
         List<PlayerStats> statsList = new ArrayList<>();
-        
+
         if (!statsDir.exists()) {
             statsDir.mkdir();
             return null;
@@ -179,7 +181,7 @@ class FileStorage implements IStorage {
     public List<PlayerStats> getTopStats(StatType statType, int limit) {
         List<PlayerStats> statsList = loadAllPlayers();
 
-        if (statsList == null) 
+        if (statsList == null)
             return null;
 
         // Фильтруем статистику по типу
@@ -212,26 +214,32 @@ class FileStorage implements IStorage {
         // Сортируем список по выбранному типу статистики
         switch (statType) {
             case PLAY_TIME:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
                 break;
             case MOBS_KILLED:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
                 break;
             case ITEMS_EATEN:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
             case BLOCKS_BROKEN:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
                 break;
             case CHEST_OPENED:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
                 break;
             case DISTANCE_TRAVELED:
-                Collections.sort(filteredStats, Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
                 break;
             default:
                 break;
         }
-        
+
         if (limit > filteredStats.size()) {
             return filteredStats;
         }
@@ -254,13 +262,15 @@ class DatabaseStorage implements IStorage {
         try {
             // Создаем соединение
             Class.forName("org.mariadb.jdbc.Driver");
-            String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":" + config.getDatabasePort() + "/" + config.getDatabaseName();
-            connection = DriverManager.getConnection(url, config.getDatabaseUsername(), config.getDatabasePassword());
+            String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":"
+                    + config.getDatabasePort() + "/" + config.getDatabaseName();
+            connection = DriverManager.getConnection(url, config.getDatabaseUsername(),
+                    config.getDatabasePassword());
 
             // Создаем таблицу, если её нет
-            PreparedStatement stmt =
-                    connection.prepareStatement("CREATE TABLE IF NOT EXISTS player_stats ("
-                            + "uuid CHAR(36) PRIMARY KEY," + "play_time INT," + "mobs_killed INT,"
+            PreparedStatement stmt = connection.prepareStatement(
+                    "CREATE TABLE IF NOT EXISTS player_stats (" + "uuid CHAR(36) PRIMARY KEY,"
+                            + "player_name STRING," + "play_time INT," + "mobs_killed INT,"
                             + "items_eaten INT," + "distance_traveled DOUBLE,"
                             + "blocks_broken INT," + "deaths INT," + "items_crafted INT,"
                             + "items_used INT," + "chests_opened INT," + "messages_sent INT" + ")");
@@ -277,9 +287,10 @@ class DatabaseStorage implements IStorage {
         CompletableFuture.runAsync(() -> {
             try {
                 PreparedStatement stmt = connection.prepareStatement(
-                        "INSERT INTO player_stats (uuid, play_time, mobs_killed, items_eaten, distance_traveled, blocks_broken, deaths, items_crafted, items_used, chests_opened, messages_sent) "
-                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                                + "ON DUPLICATE KEY UPDATE " + "play_time = VALUES(play_time),"
+                        "INSERT INTO player_stats (uuid, player_name, play_time, mobs_killed, items_eaten, distance_traveled, blocks_broken, deaths, items_crafted, items_used, chests_opened, messages_sent) "
+                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                                + "ON DUPLICATE KEY UPDATE " + "player_name = VALUES(player_name),"
+                                + "play_time = VALUES(play_time),"
                                 + "mobs_killed = VALUES(mobs_killed),"
                                 + "items_eaten = VALUES(items_eaten),"
                                 + "distance_traveled = VALUES(distance_traveled),"
@@ -291,16 +302,17 @@ class DatabaseStorage implements IStorage {
                                 + "messages_sent = VALUES(messages_sent)");
 
                 stmt.setString(1, stats.getUuid().toString());
-                stmt.setInt(2, stats.getPlayTime());
-                stmt.setInt(3, stats.getMobsKilled());
-                stmt.setInt(4, stats.getItemsEaten());
-                stmt.setDouble(5, stats.getDistanceTraveled());
-                stmt.setInt(6, stats.getBlocksBroken());
-                stmt.setInt(7, stats.getDeaths());
-                stmt.setInt(8, stats.getItemsCrafted());
-                stmt.setInt(9, stats.getItemsUsed());
-                stmt.setInt(10, stats.getChestsOpened());
-                stmt.setInt(11, stats.getMessagesSent());
+                stmt.setString(2, stats.getPlayerName());
+                stmt.setInt(3, stats.getPlayTime());
+                stmt.setInt(4, stats.getMobsKilled());
+                stmt.setInt(5, stats.getItemsEaten());
+                stmt.setDouble(6, stats.getDistanceTraveled());
+                stmt.setInt(7, stats.getBlocksBroken());
+                stmt.setInt(8, stats.getDeaths());
+                stmt.setInt(9, stats.getItemsCrafted());
+                stmt.setInt(10, stats.getItemsUsed());
+                stmt.setInt(11, stats.getChestsOpened());
+                stmt.setInt(12, stats.getMessagesSent());
 
                 stmt.executeUpdate();
                 stmt.close();
@@ -332,6 +344,7 @@ class DatabaseStorage implements IStorage {
                 stats.setItemsUsed(rs.getInt("items_used"));
                 stats.setChestsOpened(rs.getInt("chests_opened"));
                 stats.setMessagesSent(rs.getInt("messages_sent"));
+                stats.setPlayerName(rs.getString("player_name"));
 
                 rs.close();
                 stmt.close();
@@ -339,7 +352,7 @@ class DatabaseStorage implements IStorage {
             } else {
                 rs.close();
                 stmt.close();
-                // Если нет статистики для игрока, создаём новую? сохроняем и возвращаем её 
+                // Если нет статистики для игрока, создаём новую? сохроняем и возвращаем её
                 PlayerStats newStats = new PlayerStats();
                 newStats.setUuid(uuid);
                 savePlayerStats(newStats);
@@ -375,6 +388,7 @@ class DatabaseStorage implements IStorage {
                 stats.setItemsUsed(rs.getInt("items_used"));
                 stats.setChestsOpened(rs.getInt("chests_opened"));
                 stats.setMessagesSent(rs.getInt("messages_sent"));
+                stats.setPlayerName(rs.getString("player_name"));
 
                 statsList.add(stats);
 
@@ -406,36 +420,33 @@ class DatabaseStorage implements IStorage {
                 if (connection != null) {
                     connection.close();
                 }
-    
+
                 // Создаем новое соединение
                 Class.forName("org.mariadb.jdbc.Driver");
-                String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":" + config.getDatabasePort() + "/" + config.getDatabaseName();
-                connection = DriverManager.getConnection(url, config.getDatabaseUsername(), config.getDatabasePassword());
-    
+                String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":"
+                        + config.getDatabasePort() + "/" + config.getDatabaseName();
+                connection = DriverManager.getConnection(url, config.getDatabaseUsername(),
+                        config.getDatabasePassword());
+
                 // Проверяем, существует ли таблица player_stats
-                PreparedStatement stmt = connection.prepareStatement(
-                        "CREATE TABLE IF NOT EXISTS player_stats ("
-                                + "uuid CHAR(36) PRIMARY KEY,"
-                                + "play_time INT,"
-                                + "mobs_killed INT,"
-                                + "items_eaten INT,"
-                                + "distance_traveled DOUBLE,"
-                                + "blocks_broken INT,"
-                                + "deaths INT,"
-                                + "items_crafted INT,"
-                                + "items_used INT,"
-                                + "chests_opened INT,"
+                PreparedStatement stmt =
+                        connection.prepareStatement("CREATE TABLE IF NOT EXISTS player_stats ("
+                                + "uuid CHAR(36) PRIMARY KEY," + "player_name STRING,"
+                                + "play_time INT," + "mobs_killed INT," + "items_eaten INT,"
+                                + "distance_traveled DOUBLE," + "blocks_broken INT," + "deaths INT,"
+                                + "items_crafted INT," + "items_used INT," + "chests_opened INT,"
                                 + "messages_sent INT" + ")");
                 stmt.execute();
                 stmt.close();
-    
+
                 Bukkit.getLogger().info("Database storage reloaded successfully.");
             } catch (SQLException | ClassNotFoundException e) {
                 Bukkit.getLogger().severe("Error reloading database storage");
                 e.printStackTrace();
             }
         } else {
-            Bukkit.getLogger().info("Database storage is already active and does not need to be reloaded.");
+            Bukkit.getLogger()
+                    .info("Database storage is already active and does not need to be reloaded.");
         }
     }
 
@@ -457,7 +468,7 @@ class DatabaseStorage implements IStorage {
     public List<PlayerStats> getTopStats(StatType statType, int limit) {
         List<PlayerStats> statsList = loadAllPlayers();
 
-        if (statsList == null) 
+        if (statsList == null)
             return null;
 
         // Фильтруем статистику по типу
@@ -490,26 +501,32 @@ class DatabaseStorage implements IStorage {
         // Сортируем список по выбранному типу статистики
         switch (statType) {
             case PLAY_TIME:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
                 break;
             case MOBS_KILLED:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
                 break;
             case ITEMS_EATEN:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
             case BLOCKS_BROKEN:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
                 break;
             case CHEST_OPENED:
-                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
                 break;
             case DISTANCE_TRAVELED:
-                Collections.sort(filteredStats, Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
+                Collections.sort(filteredStats,
+                        Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
                 break;
             default:
                 break;
         }
-        
+
         if (limit > filteredStats.size()) {
             return filteredStats;
         }

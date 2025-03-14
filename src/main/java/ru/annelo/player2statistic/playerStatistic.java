@@ -4,6 +4,7 @@ import java.util.UUID;
 
 class PlayerStats {
     private UUID uuid;
+    private String playerName;
     private int playTime; // В минутах
     private int mobsKilled;
     private int itemsEaten;
@@ -101,5 +102,13 @@ class PlayerStats {
 
     public void setMessagesSent(int messagesSent) {
         this.messagesSent = messagesSent;
+    }
+
+    public void setPlayerName(String name) {
+        this.playerName = name;
+    }
+
+    public String getPlayerName() {
+        return playerName;
     }
 }
