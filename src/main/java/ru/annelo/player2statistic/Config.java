@@ -28,7 +28,7 @@ public class Config {
     }
 
     public boolean isFeatureEnabled(String feature) {
-        return config.getBoolean("features." + feature + ".enabled");
+        return config.getBoolean("features." + feature, true);
     }
 
     public String getDisplayFormat() {

@@ -45,6 +45,7 @@ public class StatsPlugin extends JavaPlugin {
         if (config.isAutosaveEnabled()) {
             getServer().getScheduler().runTaskTimer(this, () -> {
                 storage.saveAllPlayers();
+                getLogger().info("Данные успешно сохранены.");
             }, 0, config.getAutosaveInterval() * 20 * 60); // Интервал в тиках (20 тиков = 1 сек)
         }
 
