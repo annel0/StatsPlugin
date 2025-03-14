@@ -21,15 +21,11 @@ jobs:
         run: |
           git tag $TAG_NAME
           git push origin $TAG_NAME
-      - name: Создание релиза
-        uses: softprops/action-gh-release@v2
+      # Добавьте шаг сохранения артефакта
+      - name: Сохранение JAR-файла
+        uses: actions/upload-artifact@v4
         with:
-          tag: test-1 # $TAG_NAME  # Использует имя тега из текущего коммита
-          files: build/libs/*.jar
-          body: "Автоматический релиз для коммита ${{ github.sha }}"
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITVERSE }}
+          name: plugin-release
+          path: build/libs/*.jar
       - name: Проверка выходных файлов
         run: ls -la build/libs
