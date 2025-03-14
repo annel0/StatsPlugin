@@ -8,6 +8,9 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
 
+    env:
+      RUNNER_DEBUG: 1
+
     steps:
       - name: Клонирование репозитория
         uses: actions/checkout@v3  # Используем v3 для GitHub
