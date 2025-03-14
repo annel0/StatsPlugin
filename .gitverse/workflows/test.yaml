@@ -4,6 +4,8 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      RUNNER_DEBUG: 1  # Включение отладки
     steps:
       - uses: actions/checkout@v4
       - name: Установка JDK
