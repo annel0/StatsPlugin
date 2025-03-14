@@ -87,7 +87,11 @@ class FileStorage implements IStorage {
         File statsFile = new File(dataFolder, "stats/" + uuid.toString() + ".yml");
 
         if (!statsFile.exists()) {
-            return null;
+            // Файл не существует, создаём новый файл, сохраняем его и возвращаем пустые статистики
+            PlayerStats newStats = new PlayerStats();
+            newStats.setUuid(uuid);
+            savePlayerStats(newStats);
+            return newStats;
         }
 
         try {
@@ -332,11 +336,15 @@ class DatabaseStorage implements IStorage {
                 rs.close();
                 stmt.close();
                 return stats;
+            } else {
+                rs.close();
+                stmt.close();
+                // Если нет статистики для игрока, создаём новую? сохроняем и возвращаем её 
+                PlayerStats newStats = new PlayerStats();
+                newStats.setUuid(uuid);
+                savePlayerStats(newStats);
+                return newStats;
             }
-
-            rs.close();
-            stmt.close();
-            return null;
         } catch (SQLException e) {
             Bukkit.getLogger().severe("Error loading player stats for " + uuid);
             e.printStackTrace();
