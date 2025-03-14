@@ -21,7 +21,7 @@ jobs:
       - name: Архивация JAR-файла
         run: tar -czf artifact.tar.gz build/libs/*.jar  # Создаем архив
       - name: Создание релиза и загрузка артефакта
-        uses: softprops/action-gh-release@v4  # Используем действие для создания релиза
+        uses: softprops/action-gh-release@v3  # Используем действие для создания релиза
         if: startsWith(github.ref, 'refs/tags/')  # Выполняется только при создании тега
         with:
           files: artifact.tar.gz  # Файл для загрузки
