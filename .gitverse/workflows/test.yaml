@@ -15,9 +15,8 @@ jobs:
           distribution: 'temurin'
       - name: Сборка
         run: ./gradlew build
-      # Используем старую версию actions/upload-artifact
       - name: Сохранение JAR-файла
-        uses: actions/upload-artifact@v4.6.1  # Важно: используйте v2 вместо v4
+        uses: actions/upload-artifact@v4
         with:
           name: plugin-release
           path: build/libs/*.jar
