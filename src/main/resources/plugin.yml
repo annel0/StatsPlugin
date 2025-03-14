@@ -1,10 +1,19 @@
-main: ru.annelo.StatisticPlugin
-name: StatisticPlugin
+main: ru.annelo.player2statistic.StatsPlugin
+name: Player2Statistic
 version: "${VERSION}"
 api-version: "1.21"
-author: AUTHOR
-description: DESCRIPTION
+author: Annelo
+description: Собирает и отображает статистику игроков на сервере.
 commands:
-  ex:
-    description: Base command for EXAMPLE
-    usage: "For a list of commands, type /ex help"
+  stats:
+    description: Отображает статистику игрока.
+    usage: "/stats [player]"
+    permission: player2statistic.stats
+    permission-message: "У вас нет прав для использования этой команды."
+permissions:
+  player2statistic.stats:
+    description: Разрешение на просмотр своей статистики.
+    default: true
+  player2statistic.admin:
+    description: Разрешение на просмотр статистики других игроков.
+    default: op
