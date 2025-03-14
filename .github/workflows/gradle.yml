@@ -35,7 +35,7 @@ jobs:
           TAG_NAME="v$(date +%Y.%m.%d)-${GITHUB_RUN_NUMBER}"
           echo "tag_name=${TAG_NAME}" >> $GITHUB_ENV
           git config --local user.email "annelo@bk.ru"
-          git config --local user.name "annel0
+          git config --local user.name "annel0"
           git tag ${TAG_NAME}
           # Используем личный токен для аутентификации
           git push "https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git" ${TAG_NAME}
