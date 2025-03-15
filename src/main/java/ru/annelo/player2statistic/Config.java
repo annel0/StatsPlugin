@@ -36,27 +36,27 @@ public class Config {
     }
 
     public boolean isDatabase() {
-        return config.getString("database.type") == "database";
+        return config.getString("storage.type") == "database";
     }
 
     public String getDatabaseHost() {
-        return config.getString("database.host");
+        return config.getString("storage.database.host");
     }
 
     public int getDatabasePort() {
-        return config.getInt("database.port", 3306);
+        return config.getInt("storage.database.port", 3306);
     }
 
     public String getDatabaseName() {
-        return config.getString("database.name", "player2statistic");
+        return config.getString("storage.database.name", "player2statistic");
     }
 
     public String getDatabaseUsername() {
-        return config.getString("database.username");
+        return config.getString("storage.database.username");
     }
 
     public String getDatabasePassword() {
-        return config.getString("database.password");
+        return config.getString("storage.database.password");
     }
 
     public String getLogPath() {
