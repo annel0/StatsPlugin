@@ -98,6 +98,8 @@ class StatsListener implements Listener {
             return;
         // Запуск таймера игрового времени
         playTimeMap.put(uuid, System.currentTimeMillis());
+
+        storage.savePlayerStats(stats);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
