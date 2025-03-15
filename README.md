@@ -1,4 +1,4 @@
-# StatsPlugin 📊  
+# StatsPlugin 📊  [![.github/workflows/gradle.yml](https://github.com/annel0/StatsPlugin/actions/workflows/gradle.yml/badge.svg)](https://github.com/annel0/StatsPlugin/actions/workflows/gradle.yml)
 **Адвинутый сбор статистики игроков для Minecraft Paper**  
 
 ---
