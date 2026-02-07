@@ -57,3 +57,5 @@ features:
   foodConsumption: true
   # Включение сбора статистики убийств мобов
   mobKilling: true
+  # Включение сбора статистики сообщений в чате
+  messagesSent: true

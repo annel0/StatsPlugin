@@ -48,6 +48,7 @@ public class StatsCommand implements CommandExecutor {
                 plugin.getStorage().close();
                 plugin.setStorage(config.isDatabase() ? new DatabaseStorage(config)
                         : new FileStorage(plugin));
+                storage = plugin.getStorage();
                 player.sendMessage(ChatColor.GREEN + "Плагин успешно перезагружен.");
                 return true;
             } catch (Exception e) {
@@ -60,7 +61,16 @@ public class StatsCommand implements CommandExecutor {
     }
 
     public boolean getPlayerStats(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "Использование: /stats player <ник>");
+            return false;
+        }
+
         Player target = player.getServer().getPlayer(args[1]);
+        if (target == null) {
+            player.sendMessage(ChatColor.RED + "Игрок не найден.");
+            return false;
+        }
 
         if (!player.hasPermission("player2statistic.stats")) {
             player.sendMessage(ChatColor.RED + "У вас нет прав для использования этой команды.");
@@ -87,6 +97,12 @@ public class StatsCommand implements CommandExecutor {
     public boolean migrateDatabase(Player player, String[] args) {
         if (!player.hasPermission("player2statistic.dbtype")) {
             player.sendMessage(ChatColor.RED + "У вас нет прав для использования этой команды.");
+            return false;
+        }
+
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED
+                    + "Использование: /stats dbtype <file|database>");
             return false;
         }
 
@@ -133,13 +149,25 @@ public class StatsCommand implements CommandExecutor {
         }
 
         String type = args[1].toLowerCase();
-        int limit = args.length > 2 ? Integer.parseInt(args[2]) : 10;
+        int limit = 10;
+        if (args.length > 2) {
+            try {
+                limit = Integer.parseInt(args[2]);
+            } catch (NumberFormatException e) {
+                player.sendMessage(ChatColor.RED + "Лимит должен быть числом.");
+                return false;
+            }
+        }
 
         List<PlayerStats> topPlayers;
 
         switch (type) {
             case "play_time":
                 topPlayers = storage.getTopStats(StatType.PLAY_TIME, limit);
+                if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return true;
+                }
                 player.sendMessage(ChatColor.GOLD + "Топ игроков по времени игры:");
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
@@ -154,6 +182,10 @@ public class StatsCommand implements CommandExecutor {
                 break;
             case "blocks_broken":
                 topPlayers = storage.getTopStats(StatType.BLOCKS_BROKEN, limit);
+                if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return true;
+                }
                 player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству сломанных блоков:");
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
@@ -168,6 +200,10 @@ public class StatsCommand implements CommandExecutor {
                 break;
             case "mobs_killed":
                 topPlayers = storage.getTopStats(StatType.MOBS_KILLED, limit);
+                if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return true;
+                }
                 player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству убитых мобов:");
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
@@ -182,6 +218,10 @@ public class StatsCommand implements CommandExecutor {
                 break;
             case "chests_opened":
                 topPlayers = storage.getTopStats(StatType.CHEST_OPENED, limit);
+                if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return true;
+                }
                 player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству открытий сундуков:");
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
@@ -196,6 +236,10 @@ public class StatsCommand implements CommandExecutor {
                 break;
             case "items_eaten":
                 topPlayers = storage.getTopStats(StatType.ITEMS_EATEN, limit);
+                if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return true;
+                }
                 player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству съеденных еды:");
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);
@@ -210,6 +254,10 @@ public class StatsCommand implements CommandExecutor {
                 break;
             case "distance_traveled":
                 topPlayers = storage.getTopStats(StatType.DISTANCE_TRAVELED, limit);
+                if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return true;
+                }
                 player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству пройденного пути:");
                 for (int i = 0; i < topPlayers.size(); i++) {
                     PlayerStats stats = topPlayers.get(i);

@@ -36,7 +36,8 @@ public class Config {
     }
 
     public boolean isDatabase() {
-        return config.getString("storage.type") == "database";
+        String type = config.getString("storage.type", "file");
+        return "database".equalsIgnoreCase(type);
     }
 
     public String getDatabaseHost() {
@@ -52,7 +53,7 @@ public class Config {
     }
 
     public String getDatabaseUsername() {
-        return config.getString("storage.database.username");
+        return config.getString("storage.database.user");
     }
 
     public String getDatabasePassword() {
@@ -105,17 +106,20 @@ public class Config {
         return isFeatureEnabled("blockBreaking");
     }
 
+    public boolean isEnableMessagesSent() {
+        return isFeatureEnabled("messagesSent");
+    }
+
     public void reload() {
+        localPlugin.reloadConfig();
         config = localPlugin.getConfig();
     }
 
     public void setDatabase(boolean isDatabase) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setDatabase'");
+        config.set("storage.type", isDatabase ? "database" : "file");
     }
 
     public void save() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'save'");
+        localPlugin.saveConfig();
     }
 }

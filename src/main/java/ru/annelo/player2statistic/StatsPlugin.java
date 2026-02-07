@@ -91,6 +91,10 @@ class StatsListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
+        if (stats == null) {
+            stats = new PlayerStats();
+            stats.setUuid(uuid);
+        }
 
         stats.setPlayerName(event.getPlayer().getName());
 
@@ -111,6 +115,10 @@ class StatsListener implements Listener {
         if (playTimeMap.containsKey(uuid)) {
             long playTime = (System.currentTimeMillis() - playTimeMap.get(uuid)) / 60000;
             PlayerStats stats = storage.loadPlayerStats(uuid);
+            if (stats == null) {
+                playTimeMap.remove(uuid);
+                return;
+            }
             stats.setPlayTime(stats.getPlayTime() + (int) playTime);
             storage.savePlayerStats(stats);
             playTimeMap.remove(uuid);
@@ -126,6 +134,9 @@ class StatsListener implements Listener {
             // Увеличение счетчика убитых мобов
             Player killer = (Player) event.getEntity().getKiller();
             PlayerStats stats = storage.loadPlayerStats(killer.getUniqueId());
+            if (stats == null) {
+                return;
+            }
             stats.setMobsKilled(stats.getMobsKilled() + 1);
             storage.savePlayerStats(stats);
         }
@@ -133,11 +144,14 @@ class StatsListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerChat(AsyncChatEvent event) {
-        if (!config.isEnableKills())
+        if (!config.isEnableMessagesSent())
             return;
 
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
+        if (stats == null) {
+            return;
+        }
         stats.setMessagesSent(stats.getMessagesSent() + 1);
         storage.savePlayerStats(stats);
     }
@@ -147,9 +161,20 @@ class StatsListener implements Listener {
         if (!config.isEnableDistance())
             return;
 
+        if (event.getTo() == null
+                || !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
+            return;
+        }
+
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
+        if (stats == null) {
+            return;
+        }
         double distance = event.getFrom().distance(event.getTo());
+        if (distance <= 0) {
+            return;
+        }
         stats.setDistanceTraveled(stats.getDistanceTraveled() + distance);
         storage.savePlayerStats(stats);
     }
@@ -158,6 +183,9 @@ class StatsListener implements Listener {
     public void onPlayerInteract(PlayerInteractEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
+        if (stats == null) {
+            return;
+        }
 
         // Проверка на правый клик и едимость предмета
         if (event.getAction().name().contains("RIGHT_CLICK")) {
@@ -184,6 +212,9 @@ class StatsListener implements Listener {
 
         UUID uuid = event.getPlayer().getUniqueId();
         PlayerStats stats = storage.loadPlayerStats(uuid);
+        if (stats == null) {
+            return;
+        }
         stats.setBlocksBroken(stats.getBlocksBroken() + 1);
         storage.savePlayerStats(stats);
     }

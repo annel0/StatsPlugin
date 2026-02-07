@@ -1,6 +1,8 @@
 package ru.annelo.player2statistic;
 
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -14,6 +16,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -36,9 +43,11 @@ interface IStorage {
 }
 
 
-// Реализация локального хранилища (YAML)
+// Реализация локального хранилища (JSON)
 class FileStorage implements IStorage {
     private final JavaPlugin plugin;
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private boolean legacyMigrationAttempted = false;
 
     public FileStorage(JavaPlugin plugin2) {
         this.plugin = plugin2;
@@ -49,7 +58,8 @@ class FileStorage implements IStorage {
         try {
             // Получаем путь к файлу
             File dataFolder = plugin.getDataFolder();
-            File statsFile = new File(dataFolder, "stats/" + stats.getUuid().toString() + ".yml");
+            File statsDir = new File(dataFolder, "stats");
+            File statsFile = new File(statsDir, stats.getUuid().toString() + ".json");
 
             // Если директория не существует, создаем её
             if (!dataFolder.exists()) {
@@ -58,24 +68,15 @@ class FileStorage implements IStorage {
                             .severe("Не удалось создать директорию для сохранения статистики!");
                 }
             }
+            if (!statsDir.exists() && !statsDir.mkdirs()) {
+                Bukkit.getLogger().severe("Не удалось создать директорию stats!");
+            }
 
-            // Создаем конфигурацию
-            YamlConfiguration config = new YamlConfiguration();
-            config.set("uuid", stats.getUuid().toString());
-            config.set("player_name", stats.getPlayerName());
-            config.set("playTime", stats.getPlayTime());
-            config.set("mobsKilled", stats.getMobsKilled());
-            config.set("itemsEaten", stats.getItemsEaten());
-            config.set("distanceTraveled", stats.getDistanceTraveled());
-            config.set("blocksBroken", stats.getBlocksBroken());
-            config.set("deaths", stats.getDeaths());
-            config.set("itemsCrafted", stats.getItemsCrafted());
-            config.set("itemsUsed", stats.getItemsUsed());
-            config.set("chestsOpened", stats.getChestsOpened());
-            config.set("messagesSent", stats.getMessagesSent());
+            JsonObject json = StatsJsonCodec.toJson(stats);
 
-            // Сохраняем в файл
-            config.save(statsFile);
+            try (FileWriter writer = new FileWriter(statsFile)) {
+                GSON.toJson(json, writer);
+            }
         } catch (IOException e) {
             Bukkit.getLogger().severe("Error saving player stats for " + stats.getUuid());
             e.printStackTrace();
@@ -84,10 +85,19 @@ class FileStorage implements IStorage {
 
     @Override
     public PlayerStats loadPlayerStats(UUID uuid) {
+        migrateLegacyJsonIfPresent();
         File dataFolder = plugin.getDataFolder();
-        File statsFile = new File(dataFolder, "stats/" + uuid.toString() + ".yml");
+        File statsFile = new File(dataFolder, "stats/" + uuid.toString() + ".json");
+        File legacyStatsFile = new File(dataFolder, "stats/" + uuid.toString() + ".yml");
 
         if (!statsFile.exists()) {
+            if (legacyStatsFile.exists()) {
+                PlayerStats legacyStats = loadLegacyYamlStats(legacyStatsFile);
+                if (legacyStats != null) {
+                    savePlayerStats(legacyStats);
+                    return legacyStats;
+                }
+            }
             // Файл не существует, создаём новый файл, сохраняем его и возвращаем пустые статистики
             PlayerStats newStats = new PlayerStats();
             newStats.setUuid(uuid);
@@ -96,23 +106,10 @@ class FileStorage implements IStorage {
         }
 
         try {
-            YamlConfiguration config = YamlConfiguration.loadConfiguration(statsFile);
-
-            PlayerStats stats = new PlayerStats();
-            stats.setUuid(UUID.fromString(config.getString("uuid")));
-            stats.setPlayerName(config.getString("player_name"));
-            stats.setPlayTime(config.getInt("playTime"));
-            stats.setMobsKilled(config.getInt("mobsKilled"));
-            stats.setItemsEaten(config.getInt("itemsEaten"));
-            stats.setDistanceTraveled(config.getDouble("distanceTraveled"));
-            stats.setBlocksBroken(config.getInt("blocksBroken"));
-            stats.setDeaths(config.getInt("deaths"));
-            stats.setItemsCrafted(config.getInt("itemsCrafted"));
-            stats.setItemsUsed(config.getInt("itemsUsed"));
-            stats.setChestsOpened(config.getInt("chestsOpened"));
-            stats.setMessagesSent(config.getInt("messagesSent"));
-
-            return stats;
+            try (FileReader reader = new FileReader(statsFile)) {
+                JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+                return StatsJsonCodec.fromJson(json, uuid);
+            }
         } catch (Exception e) {
             Bukkit.getLogger().severe("Error loading player stats for " + uuid);
             e.printStackTrace();
@@ -122,6 +119,7 @@ class FileStorage implements IStorage {
 
     @Override
     public List<PlayerStats> loadAllPlayers() {
+        migrateLegacyJsonIfPresent();
         File dataFolder = plugin.getDataFolder();
         File statsDir = new File(dataFolder, "stats");
 
@@ -129,15 +127,28 @@ class FileStorage implements IStorage {
 
         if (!statsDir.exists()) {
             statsDir.mkdir();
-            return null;
+            return Collections.emptyList();
         }
 
-        for (File file : statsDir.listFiles()) {
-            if (file.getName().endsWith(".yml")) {
-                UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
+        File[] files = statsDir.listFiles();
+        if (files == null) {
+            return Collections.emptyList();
+        }
+
+        for (File file : files) {
+            if (file.getName().endsWith(".json")) {
+                UUID uuid = UUID.fromString(file.getName().replace(".json", ""));
                 PlayerStats stats = loadPlayerStats(uuid);
                 if (stats != null) {
                     Bukkit.getLogger().info("Loaded stats for " + uuid);
+                    statsList.add(stats);
+                }
+            }
+            if (file.getName().endsWith(".yml")) {
+                UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
+                PlayerStats stats = loadLegacyYamlStats(file);
+                if (stats != null) {
+                    savePlayerStats(stats);
                     statsList.add(stats);
                 }
             }
@@ -155,9 +166,14 @@ class FileStorage implements IStorage {
             statsDir.mkdir();
         }
 
-        for (File file : statsDir.listFiles()) {
-            if (file.getName().endsWith(".yml")) {
-                UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
+        File[] files = statsDir.listFiles();
+        if (files == null) {
+            return;
+        }
+
+        for (File file : files) {
+            if (file.getName().endsWith(".json")) {
+                UUID uuid = UUID.fromString(file.getName().replace(".json", ""));
                 PlayerStats stats = loadPlayerStats(uuid);
                 if (stats != null) {
                     savePlayerStats(stats);
@@ -174,7 +190,83 @@ class FileStorage implements IStorage {
     @Override
     public void close() {
         saveAllPlayers();
-        Bukkit.getLogger().info("Saved all players' stats to YAML files.");
+        Bukkit.getLogger().info("Saved all players' stats to JSON files.");
+    }
+
+    private PlayerStats loadLegacyYamlStats(File statsFile) {
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(statsFile);
+            PlayerStats stats = new PlayerStats();
+            stats.setUuid(UUID.fromString(config.getString("uuid")));
+            stats.setPlayerName(config.getString("player_name"));
+            stats.setPlayTime(config.getInt("playTime"));
+            stats.setMobsKilled(config.getInt("mobsKilled"));
+            stats.setItemsEaten(config.getInt("itemsEaten"));
+            stats.setDistanceTraveled(config.getDouble("distanceTraveled"));
+            stats.setBlocksBroken(config.getInt("blocksBroken"));
+            stats.setDeaths(config.getInt("deaths"));
+            stats.setItemsCrafted(config.getInt("itemsCrafted"));
+            stats.setItemsUsed(config.getInt("itemsUsed"));
+            stats.setChestsOpened(config.getInt("chestsOpened"));
+            stats.setMessagesSent(config.getInt("messagesSent"));
+            return stats;
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("Error loading legacy YAML stats for " + statsFile.getName());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private void migrateLegacyJsonIfPresent() {
+        if (legacyMigrationAttempted) {
+            return;
+        }
+        legacyMigrationAttempted = true;
+        File dataFolder = plugin.getDataFolder();
+        File legacyFile = new File(dataFolder, "stats.json");
+        File statsDir = new File(dataFolder, "stats");
+        if (!legacyFile.exists()) {
+            return;
+        }
+        if (!statsDir.exists() && !statsDir.mkdirs()) {
+            Bukkit.getLogger().severe("Не удалось создать директорию stats для миграции!");
+            return;
+        }
+
+        try (FileReader reader = new FileReader(legacyFile)) {
+            JsonElement root = JsonParser.parseReader(reader);
+            if (root.isJsonObject()) {
+                JsonObject obj = root.getAsJsonObject();
+                for (String key : obj.keySet()) {
+                    JsonElement value = obj.get(key);
+                    if (value != null && value.isJsonObject()) {
+                        PlayerStats stats = StatsJsonCodec.fromJson(value.getAsJsonObject(),
+                                UUID.fromString(key));
+                        savePlayerStats(stats);
+                    }
+                }
+            } else if (root.isJsonArray()) {
+                for (JsonElement element : root.getAsJsonArray()) {
+                    if (element.isJsonObject()) {
+                        JsonObject obj = element.getAsJsonObject();
+                        if (obj.has("uuid")) {
+                            PlayerStats stats =
+                                    StatsJsonCodec.fromJson(obj, UUID.fromString(obj.get("uuid")
+                                            .getAsString()));
+                            savePlayerStats(stats);
+                        }
+                    }
+                }
+            }
+            File backupFile = new File(dataFolder, "stats.json.bak");
+            if (!legacyFile.renameTo(backupFile)) {
+                Bukkit.getLogger().warning(
+                        "Не удалось переименовать legacy stats.json после миграции.");
+            }
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("Ошибка миграции legacy stats.json");
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -199,15 +291,19 @@ class FileStorage implements IStorage {
                 case ITEMS_EATEN:
                     if (stats.getItemsEaten() > 0)
                         filteredStats.add(stats);
+                    break;
                 case DISTANCE_TRAVELED:
                     if (stats.getDistanceTraveled() > 0)
                         filteredStats.add(stats);
+                    break;
                 case BLOCKS_BROKEN:
                     if (stats.getBlocksBroken() > 0)
                         filteredStats.add(stats);
+                    break;
                 case CHEST_OPENED:
                     if (stats.getChestsOpened() > 0)
                         filteredStats.add(stats);
+                    break;
             }
         }
 
@@ -224,6 +320,7 @@ class FileStorage implements IStorage {
             case ITEMS_EATEN:
                 Collections.sort(filteredStats,
                         Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+                break;
             case BLOCKS_BROKEN:
                 Collections.sort(filteredStats,
                         Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
@@ -270,7 +367,7 @@ class DatabaseStorage implements IStorage {
             // Создаем таблицу, если её нет
             PreparedStatement stmt = connection.prepareStatement(
                     "CREATE TABLE IF NOT EXISTS player_stats (" + "uuid CHAR(36) PRIMARY KEY,"
-                            + "player_name STRING," + "play_time INT," + "mobs_killed INT,"
+                            + "player_name VARCHAR(64)," + "play_time INT," + "mobs_killed INT,"
                             + "items_eaten INT," + "distance_traveled DOUBLE,"
                             + "blocks_broken INT," + "deaths INT," + "items_crafted INT,"
                             + "items_used INT," + "chests_opened INT," + "messages_sent INT" + ")");
@@ -403,7 +500,7 @@ class DatabaseStorage implements IStorage {
             e.printStackTrace();
         }
 
-        return null;
+        return Collections.emptyList();
     }
 
     @Override
@@ -414,39 +511,30 @@ class DatabaseStorage implements IStorage {
 
     @Override
     public void reloadStorage() {
-        if (connection == null) {
-            try {
-                // Закрываем старое соединение, если оно существует
-                if (connection != null) {
-                    connection.close();
-                }
-
-                // Создаем новое соединение
-                Class.forName("org.mariadb.jdbc.Driver");
-                String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":"
-                        + config.getDatabasePort() + "/" + config.getDatabaseName();
-                connection = DriverManager.getConnection(url, config.getDatabaseUsername(),
-                        config.getDatabasePassword());
-
-                // Проверяем, существует ли таблица player_stats
-                PreparedStatement stmt =
-                        connection.prepareStatement("CREATE TABLE IF NOT EXISTS player_stats ("
-                                + "uuid CHAR(36) PRIMARY KEY," + "player_name STRING,"
-                                + "play_time INT," + "mobs_killed INT," + "items_eaten INT,"
-                                + "distance_traveled DOUBLE," + "blocks_broken INT," + "deaths INT,"
-                                + "items_crafted INT," + "items_used INT," + "chests_opened INT,"
-                                + "messages_sent INT" + ")");
-                stmt.execute();
-                stmt.close();
-
-                Bukkit.getLogger().info("Database storage reloaded successfully.");
-            } catch (SQLException | ClassNotFoundException e) {
-                Bukkit.getLogger().severe("Error reloading database storage");
-                e.printStackTrace();
+        try {
+            if (connection != null) {
+                connection.close();
             }
-        } else {
-            Bukkit.getLogger()
-                    .info("Database storage is already active and does not need to be reloaded.");
+
+            Class.forName("org.mariadb.jdbc.Driver");
+            String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":"
+                    + config.getDatabasePort() + "/" + config.getDatabaseName();
+            connection = DriverManager.getConnection(url, config.getDatabaseUsername(),
+                    config.getDatabasePassword());
+
+            PreparedStatement stmt = connection.prepareStatement(
+                    "CREATE TABLE IF NOT EXISTS player_stats (" + "uuid CHAR(36) PRIMARY KEY,"
+                            + "player_name VARCHAR(64)," + "play_time INT," + "mobs_killed INT,"
+                            + "items_eaten INT," + "distance_traveled DOUBLE,"
+                            + "blocks_broken INT," + "deaths INT," + "items_crafted INT,"
+                            + "items_used INT," + "chests_opened INT," + "messages_sent INT" + ")");
+            stmt.execute();
+            stmt.close();
+
+            Bukkit.getLogger().info("Database storage reloaded successfully.");
+        } catch (SQLException | ClassNotFoundException e) {
+            Bukkit.getLogger().severe("Error reloading database storage");
+            e.printStackTrace();
         }
     }
 
@@ -486,15 +574,19 @@ class DatabaseStorage implements IStorage {
                 case ITEMS_EATEN:
                     if (stats.getItemsEaten() > 0)
                         filteredStats.add(stats);
+                    break;
                 case DISTANCE_TRAVELED:
                     if (stats.getDistanceTraveled() > 0)
                         filteredStats.add(stats);
+                    break;
                 case BLOCKS_BROKEN:
                     if (stats.getBlocksBroken() > 0)
                         filteredStats.add(stats);
+                    break;
                 case CHEST_OPENED:
                     if (stats.getChestsOpened() > 0)
                         filteredStats.add(stats);
+                    break;
             }
         }
 
@@ -511,6 +603,7 @@ class DatabaseStorage implements IStorage {
             case ITEMS_EATEN:
                 Collections.sort(filteredStats,
                         Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+                break;
             case BLOCKS_BROKEN:
                 Collections.sort(filteredStats,
                         Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
