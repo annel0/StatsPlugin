@@ -111,4 +111,36 @@ class PlayerStats {
     public String getPlayerName() {
         return playerName;
     }
+
+    public PlayerStats clone() {
+        PlayerStats clone = new PlayerStats();
+        clone.setUuid(this.uuid);
+        clone.setPlayerName(this.playerName);
+        clone.setPlayTime(this.playTime);
+        clone.setMobsKilled(this.mobsKilled);
+        clone.setItemsEaten(this.itemsEaten);
+        clone.setDistanceTraveled(this.distanceTraveled);
+        clone.setBlocksBroken(this.blocksBroken);
+        clone.setDeaths(this.deaths);
+        clone.setItemsCrafted(this.itemsCrafted);
+        clone.setItemsUsed(this.itemsUsed);
+        clone.setChestsOpened(this.chestsOpened);
+        clone.setMessagesSent(this.messagesSent);
+        return clone;
+    }
+
+    public void merge(PlayerStats other) {
+        if (other == null) return;
+        this.playTime += other.playTime;
+        this.mobsKilled += other.mobsKilled;
+        this.itemsEaten += other.itemsEaten;
+        this.distanceTraveled += other.distanceTraveled;
+        this.blocksBroken += other.blocksBroken;
+        this.deaths += other.deaths;
+        this.itemsCrafted += other.itemsCrafted;
+        this.itemsUsed += other.itemsUsed;
+        this.chestsOpened += other.chestsOpened;
+        this.messagesSent += other.messagesSent;
+        // Player name and UUID should match or be handled separately
+    }
 }

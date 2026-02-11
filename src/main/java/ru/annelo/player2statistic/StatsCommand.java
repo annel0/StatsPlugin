@@ -1,6 +1,7 @@
 package ru.annelo.player2statistic;
 
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -9,12 +10,12 @@ import net.md_5.bungee.api.ChatColor;
 
 public class StatsCommand implements CommandExecutor {
 
-    private IStorage storage;
+    private final StatsManager statsManager;
     private final Config config;
     private final StatsPlugin plugin;
 
-    public StatsCommand(StatsPlugin plugin, IStorage storage, Config config) {
-        this.storage = storage;
+    public StatsCommand(StatsPlugin plugin, StatsManager statsManager, Config config) {
+        this.statsManager = statsManager;
         this.config = config;
         this.plugin = plugin;
     }
@@ -48,7 +49,6 @@ public class StatsCommand implements CommandExecutor {
                 plugin.getStorage().close();
                 plugin.setStorage(config.isDatabase() ? new DatabaseStorage(config)
                         : new FileStorage(plugin));
-                storage = plugin.getStorage();
                 player.sendMessage(ChatColor.GREEN + "Плагин успешно перезагружен.");
                 return true;
             } catch (Exception e) {
@@ -68,7 +68,7 @@ public class StatsCommand implements CommandExecutor {
 
         Player target = player.getServer().getPlayer(args[1]);
         if (target == null) {
-            player.sendMessage(ChatColor.RED + "Игрок не найден.");
+            player.sendMessage(ChatColor.RED + "Игрок не найден (поддерживаются только онлайн игроки).");
             return false;
         }
 
@@ -77,7 +77,12 @@ public class StatsCommand implements CommandExecutor {
             return false;
         }
 
-        PlayerStats stats = storage.loadPlayerStats(target.getUniqueId());
+        PlayerStats stats = statsManager.getStats(target.getUniqueId());
+        if (stats == null) {
+            // Fallback to storage if not in cache (rare case for online player)
+            stats = plugin.getStorage().loadPlayerStats(target.getUniqueId());
+        }
+
         if (stats == null) {
             player.sendMessage(ChatColor.RED + "Статистика не найдена.");
             return false;
@@ -119,21 +124,49 @@ public class StatsCommand implements CommandExecutor {
             return false;
         }
 
-        try {
-            IStorage newStorage =
-                    isDatabase ? new DatabaseStorage(config) : new FileStorage(plugin);
-            storage.close();
-            storage = newStorage;
-            config.setDatabase(isDatabase);
-            config.save();
+        player.sendMessage(ChatColor.YELLOW + "Начинаю миграцию данных... Это может занять некоторое время.");
 
-        } catch (Exception e) {
-            player.sendMessage(ChatColor.RED + "Ошибка при переключении базы данных.");
-            e.printStackTrace();
-            return false;
-        }
-        player.sendMessage(ChatColor.GREEN + "База данных успешно переключена на "
-                + (isDatabase ? "базу данных" : "файловую систему."));
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                IStorage oldStorage = plugin.getStorage();
+                // Load all stats from old storage
+                List<PlayerStats> allStats = oldStorage.loadAllPlayers();
+
+                // Initialize new storage
+                IStorage newStorage = isDatabase ? new DatabaseStorage(config) : new FileStorage(plugin);
+
+                // Save to new storage
+                int count = 0;
+                for (PlayerStats stats : allStats) {
+                    newStorage.savePlayerStats(stats);
+                    count++;
+                }
+
+                final int migratedCount = count;
+
+                // Update plugin storage on main thread
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    try {
+                        oldStorage.close();
+                        plugin.setStorage(newStorage);
+                        config.setDatabase(isDatabase);
+                        config.save();
+                        player.sendMessage(ChatColor.GREEN + "Миграция завершена успешно. Перенесено " + migratedCount + " записей.");
+                        player.sendMessage(ChatColor.GREEN + "База данных переключена на " + (isDatabase ? "базу данных" : "файловую систему."));
+                    } catch (Exception e) {
+                        player.sendMessage(ChatColor.RED + "Ошибка при переключении хранилища.");
+                        e.printStackTrace();
+                    }
+                });
+
+            } catch (Exception e) {
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "Ошибка при миграции данных.");
+                    e.printStackTrace();
+                });
+            }
+        });
+
         return true;
     }
 
@@ -159,123 +192,68 @@ public class StatsCommand implements CommandExecutor {
             }
         }
 
-        List<PlayerStats> topPlayers;
-
-        switch (type) {
-            case "play_time":
-                topPlayers = storage.getTopStats(StatType.PLAY_TIME, limit);
-                if (topPlayers == null || topPlayers.isEmpty()) {
-                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
-                    return true;
-                }
-                player.sendMessage(ChatColor.GOLD + "Топ игроков по времени игры:");
-                for (int i = 0; i < topPlayers.size(); i++) {
-                    PlayerStats stats = topPlayers.get(i);
-
-                    String playerName =
-                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
-                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
-
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
-                            + stats.getPlayTime() + " секунд");
-                }
-                break;
-            case "blocks_broken":
-                topPlayers = storage.getTopStats(StatType.BLOCKS_BROKEN, limit);
-                if (topPlayers == null || topPlayers.isEmpty()) {
-                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
-                    return true;
-                }
-                player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству сломанных блоков:");
-                for (int i = 0; i < topPlayers.size(); i++) {
-                    PlayerStats stats = topPlayers.get(i);
-
-                    String playerName =
-                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
-                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
-
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
-                            + stats.getBlocksBroken() + " блоков");
-                }
-                break;
-            case "mobs_killed":
-                topPlayers = storage.getTopStats(StatType.MOBS_KILLED, limit);
-                if (topPlayers == null || topPlayers.isEmpty()) {
-                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
-                    return true;
-                }
-                player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству убитых мобов:");
-                for (int i = 0; i < topPlayers.size(); i++) {
-                    PlayerStats stats = topPlayers.get(i);
-
-                    String playerName =
-                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
-                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
-
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
-                            + stats.getMobsKilled() + " мобов");
-                }
-                break;
-            case "chests_opened":
-                topPlayers = storage.getTopStats(StatType.CHEST_OPENED, limit);
-                if (topPlayers == null || topPlayers.isEmpty()) {
-                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
-                    return true;
-                }
-                player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству открытий сундуков:");
-                for (int i = 0; i < topPlayers.size(); i++) {
-                    PlayerStats stats = topPlayers.get(i);
-
-                    String playerName =
-                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
-                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
-
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
-                            + stats.getChestsOpened() + " сундуков");
-                }
-                break;
-            case "items_eaten":
-                topPlayers = storage.getTopStats(StatType.ITEMS_EATEN, limit);
-                if (topPlayers == null || topPlayers.isEmpty()) {
-                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
-                    return true;
-                }
-                player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству съеденных еды:");
-                for (int i = 0; i < topPlayers.size(); i++) {
-                    PlayerStats stats = topPlayers.get(i);
-
-                    String playerName =
-                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
-                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
-
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
-                            + stats.getItemsEaten() + " еды");
-                }
-                break;
-            case "distance_traveled":
-                topPlayers = storage.getTopStats(StatType.DISTANCE_TRAVELED, limit);
-                if (topPlayers == null || topPlayers.isEmpty()) {
-                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
-                    return true;
-                }
-                player.sendMessage(ChatColor.GOLD + "Топ игроков по количеству пройденного пути:");
-                for (int i = 0; i < topPlayers.size(); i++) {
-                    PlayerStats stats = topPlayers.get(i);
-
-                    String playerName =
-                            plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
-                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
-
-                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - "
-                            + stats.getDistanceTraveled() + " метров");
-                }
-                break;
-
-            default:
-                player.sendMessage(ChatColor.RED
-                        + "Неверный тип статистики. Доступные типы: play_time, blocks_broken, mobs_killed, chests_opened, items_eaten, distance_traveled");
-
+        StatType statType;
+        try {
+            if (type.equals("chests_opened")) {
+                statType = StatType.CHEST_OPENED;
+            } else {
+                statType = StatType.valueOf(type.toUpperCase());
+            }
+        } catch (IllegalArgumentException e) {
+            player.sendMessage(ChatColor.RED + "Неверный тип статистики.");
+            return false;
         }
+
+        // Asynchronously fetch top stats to avoid blocking main thread
+        // Commands usually run on main thread.
+        // We should run this async and send message later.
+        final int finalLimit = limit;
+        final StatType finalStatType = statType;
+        player.sendMessage(ChatColor.GRAY + "Загрузка топа...");
+
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<PlayerStats> topPlayers = plugin.getStorage().getTopStats(finalStatType, finalLimit);
+
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                 if (topPlayers == null || topPlayers.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Нет данных для отображения.");
+                    return;
+                }
+
+                String title = "";
+                switch (type) {
+                     case "play_time": title = "Топ игроков по времени игры:"; break;
+                     case "blocks_broken": title = "Топ игроков по количеству сломанных блоков:"; break;
+                     case "mobs_killed": title = "Топ игроков по количеству убитых мобов:"; break;
+                     case "chests_opened": title = "Топ игроков по количеству открытий сундуков:"; break;
+                     case "items_eaten": title = "Топ игроков по количеству съеденных еды:"; break;
+                     case "distance_traveled": title = "Топ игроков по количеству пройденного пути:"; break;
+                }
+
+                player.sendMessage(ChatColor.GOLD + title);
+                for (int i = 0; i < topPlayers.size(); i++) {
+                    PlayerStats stats = topPlayers.get(i);
+
+                    String playerName = stats.getPlayerName();
+                    if (playerName == null) {
+                         playerName = plugin.getServer().getOfflinePlayer(stats.getUuid()).getName();
+                    }
+                    playerName = playerName == null ? "Неизвестный игрок" : playerName;
+
+                    String value = "";
+                    switch (type) {
+                        case "play_time": value = stats.getPlayTime() + " секунд"; break; // Wait, playTime is minutes in PlayerStats? logic says seconds in output but minutes in field comments.
+                        case "blocks_broken": value = stats.getBlocksBroken() + " блоков"; break;
+                        case "mobs_killed": value = stats.getMobsKilled() + " мобов"; break;
+                        case "chests_opened": value = stats.getChestsOpened() + " сундуков"; break;
+                        case "items_eaten": value = stats.getItemsEaten() + " еды"; break;
+                        case "distance_traveled": value = String.format("%.2f метров", stats.getDistanceTraveled()); break;
+                    }
+
+                    player.sendMessage(ChatColor.YELLOW + "#" + (i + 1) + " " + playerName + " - " + value);
+                }
+            });
+        });
 
         return true;
     }

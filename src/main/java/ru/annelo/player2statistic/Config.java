@@ -64,22 +64,9 @@ public class Config {
         return config.getString("log.path");
     }
 
-    // Сохранение изменений в файле
-    public void saveConfig(String file_name) {
-        try {
-            config.save(file_name);
-        } catch (Exception e) {
-            logger.severe(String.format("Ошибка сохранения файла %s", file_name));
-        }
-    }
-
     // Сохранение изменений в файле config.yml
     public void saveConfig() {
-        try {
-            config.save("config.yml");
-        } catch (Exception e) {
-            logger.severe("Ошибка сохранения файла config.yml");
-        }
+        localPlugin.saveConfig();
     }
 
     public boolean isEnablePlayTime() {

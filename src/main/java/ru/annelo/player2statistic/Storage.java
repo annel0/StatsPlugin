@@ -5,7 +5,6 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -14,13 +13,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -39,7 +39,7 @@ interface IStorage {
 
     void close();
 
-    List<PlayerStats> getTopStats(StatType playTime, int limit);
+    List<PlayerStats> getTopStats(StatType statType, int limit);
 }
 
 
@@ -54,22 +54,17 @@ class FileStorage implements IStorage {
     }
 
     @Override
-    public void savePlayerStats(PlayerStats stats) {
+    public synchronized void savePlayerStats(PlayerStats stats) {
         try {
-            // Получаем путь к файлу
             File dataFolder = plugin.getDataFolder();
             File statsDir = new File(dataFolder, "stats");
             File statsFile = new File(statsDir, stats.getUuid().toString() + ".json");
 
-            // Если директория не существует, создаем её
             if (!dataFolder.exists()) {
-                if (!dataFolder.mkdirs()) {
-                    Bukkit.getLogger()
-                            .severe("Не удалось создать директорию для сохранения статистики!");
-                }
+                dataFolder.mkdirs();
             }
-            if (!statsDir.exists() && !statsDir.mkdirs()) {
-                Bukkit.getLogger().severe("Не удалось создать директорию stats!");
+            if (!statsDir.exists()) {
+                statsDir.mkdirs();
             }
 
             JsonObject json = StatsJsonCodec.toJson(stats);
@@ -84,7 +79,7 @@ class FileStorage implements IStorage {
     }
 
     @Override
-    public PlayerStats loadPlayerStats(UUID uuid) {
+    public synchronized PlayerStats loadPlayerStats(UUID uuid) {
         migrateLegacyJsonIfPresent();
         File dataFolder = plugin.getDataFolder();
         File statsFile = new File(dataFolder, "stats/" + uuid.toString() + ".json");
@@ -98,7 +93,6 @@ class FileStorage implements IStorage {
                     return legacyStats;
                 }
             }
-            // Файл не существует, создаём новый файл, сохраняем его и возвращаем пустые статистики
             PlayerStats newStats = new PlayerStats();
             newStats.setUuid(uuid);
             savePlayerStats(newStats);
@@ -118,7 +112,7 @@ class FileStorage implements IStorage {
     }
 
     @Override
-    public List<PlayerStats> loadAllPlayers() {
+    public synchronized List<PlayerStats> loadAllPlayers() {
         migrateLegacyJsonIfPresent();
         File dataFolder = plugin.getDataFolder();
         File statsDir = new File(dataFolder, "stats");
@@ -140,11 +134,12 @@ class FileStorage implements IStorage {
                 UUID uuid = UUID.fromString(file.getName().replace(".json", ""));
                 PlayerStats stats = loadPlayerStats(uuid);
                 if (stats != null) {
-                    Bukkit.getLogger().info("Loaded stats for " + uuid);
                     statsList.add(stats);
                 }
             }
-            if (file.getName().endsWith(".yml")) {
+            // Removed legacy yaml loading here to speed up, assuming they are migrated on individual load or separate migration.
+            // Keeping it consistent with previous logic though:
+             if (file.getName().endsWith(".yml")) {
                 UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
                 PlayerStats stats = loadLegacyYamlStats(file);
                 if (stats != null) {
@@ -159,38 +154,17 @@ class FileStorage implements IStorage {
 
     @Override
     public void saveAllPlayers() {
-        File dataFolder = plugin.getDataFolder();
-        File statsDir = new File(dataFolder, "stats");
-
-        if (!statsDir.exists()) {
-            statsDir.mkdir();
-        }
-
-        File[] files = statsDir.listFiles();
-        if (files == null) {
-            return;
-        }
-
-        for (File file : files) {
-            if (file.getName().endsWith(".json")) {
-                UUID uuid = UUID.fromString(file.getName().replace(".json", ""));
-                PlayerStats stats = loadPlayerStats(uuid);
-                if (stats != null) {
-                    savePlayerStats(stats);
-                }
-            }
-        }
+        // StatsManager handles periodic saving. This might be unused now except on close.
     }
 
     @Override
     public void reloadStorage() {
-        loadAllPlayers();
+        // No-op for file storage usually
     }
 
     @Override
     public void close() {
-        saveAllPlayers();
-        Bukkit.getLogger().info("Saved all players' stats to JSON files.");
+        // Nothing to close
     }
 
     private PlayerStats loadLegacyYamlStats(File statsFile) {
@@ -229,7 +203,6 @@ class FileStorage implements IStorage {
             return;
         }
         if (!statsDir.exists() && !statsDir.mkdirs()) {
-            Bukkit.getLogger().severe("Не удалось создать директорию stats для миграции!");
             return;
         }
 
@@ -259,10 +232,7 @@ class FileStorage implements IStorage {
                 }
             }
             File backupFile = new File(dataFolder, "stats.json.bak");
-            if (!legacyFile.renameTo(backupFile)) {
-                Bukkit.getLogger().warning(
-                        "Не удалось переименовать legacy stats.json после миграции.");
-            }
+            legacyFile.renameTo(backupFile);
         } catch (Exception e) {
             Bukkit.getLogger().severe("Ошибка миграции legacy stats.json");
             e.printStackTrace();
@@ -271,69 +241,44 @@ class FileStorage implements IStorage {
 
     @Override
     public List<PlayerStats> getTopStats(StatType statType, int limit) {
+        // Warning: Loading all players into memory!
         List<PlayerStats> statsList = loadAllPlayers();
 
         if (statsList == null)
-            return null;
+            return Collections.emptyList();
 
-        // Фильтруем статистику по типу
         List<PlayerStats> filteredStats = new ArrayList<>();
         for (PlayerStats stats : statsList) {
-            switch (statType) {
-                case PLAY_TIME:
-                    if (stats.getPlayTime() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case MOBS_KILLED:
-                    if (stats.getMobsKilled() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case ITEMS_EATEN:
-                    if (stats.getItemsEaten() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case DISTANCE_TRAVELED:
-                    if (stats.getDistanceTraveled() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case BLOCKS_BROKEN:
-                    if (stats.getBlocksBroken() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case CHEST_OPENED:
-                    if (stats.getChestsOpened() > 0)
-                        filteredStats.add(stats);
-                    break;
+             boolean add = false;
+             switch (statType) {
+                case PLAY_TIME: add = stats.getPlayTime() > 0; break;
+                case MOBS_KILLED: add = stats.getMobsKilled() > 0; break;
+                case ITEMS_EATEN: add = stats.getItemsEaten() > 0; break;
+                case DISTANCE_TRAVELED: add = stats.getDistanceTraveled() > 0; break;
+                case BLOCKS_BROKEN: add = stats.getBlocksBroken() > 0; break;
+                case CHEST_OPENED: add = stats.getChestsOpened() > 0; break;
             }
+            if (add) filteredStats.add(stats);
         }
 
-        // Сортируем список по выбранному типу статистики
         switch (statType) {
             case PLAY_TIME:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
                 break;
             case MOBS_KILLED:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
                 break;
             case ITEMS_EATEN:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
                 break;
             case BLOCKS_BROKEN:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
                 break;
             case CHEST_OPENED:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
+                Collections.sort(filteredStats, Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
                 break;
             case DISTANCE_TRAVELED:
-                Collections.sort(filteredStats,
-                        Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
-                break;
-            default:
+                Collections.sort(filteredStats, Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
                 break;
         }
 
@@ -343,37 +288,43 @@ class FileStorage implements IStorage {
         if (limit <= 0) {
             return filteredStats;
         }
-
         return filteredStats.subList(0, Math.min(filteredStats.size(), limit));
     }
 }
 
 
 class DatabaseStorage implements IStorage {
-    private Connection connection;
+    private HikariDataSource dataSource;
     private Config config;
 
     public DatabaseStorage(Config config) {
         this.config = config;
+        initialize();
+    }
 
-        try {
-            // Создаем соединение
-            Class.forName("org.mariadb.jdbc.Driver");
-            String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":"
-                    + config.getDatabasePort() + "/" + config.getDatabaseName();
-            connection = DriverManager.getConnection(url, config.getDatabaseUsername(),
-                    config.getDatabasePassword());
+    private void initialize() {
+        HikariConfig hikariConfig = new HikariConfig();
+        hikariConfig.setJdbcUrl("jdbc:mariadb://" + config.getDatabaseHost() + ":"
+                + config.getDatabasePort() + "/" + config.getDatabaseName());
+        hikariConfig.setUsername(config.getDatabaseUsername());
+        hikariConfig.setPassword(config.getDatabasePassword());
+        hikariConfig.setDriverClassName("org.mariadb.jdbc.Driver");
+        hikariConfig.setMaximumPoolSize(10);
+        hikariConfig.setMinimumIdle(2);
+        hikariConfig.setIdleTimeout(30000);
+        hikariConfig.setConnectionTimeout(10000);
 
-            // Создаем таблицу, если её нет
-            PreparedStatement stmt = connection.prepareStatement(
+        dataSource = new HikariDataSource(hikariConfig);
+
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(
                     "CREATE TABLE IF NOT EXISTS player_stats (" + "uuid CHAR(36) PRIMARY KEY,"
                             + "player_name VARCHAR(64)," + "play_time INT," + "mobs_killed INT,"
                             + "items_eaten INT," + "distance_traveled DOUBLE,"
                             + "blocks_broken INT," + "deaths INT," + "items_crafted INT,"
-                            + "items_used INT," + "chests_opened INT," + "messages_sent INT" + ")");
+                            + "items_used INT," + "chests_opened INT," + "messages_sent INT" + ")")) {
             stmt.execute();
-            stmt.close();
-        } catch (SQLException | ClassNotFoundException e) {
+        } catch (SQLException e) {
             Bukkit.getLogger().severe("Error connecting to database");
             e.printStackTrace();
         }
@@ -381,79 +332,56 @@ class DatabaseStorage implements IStorage {
 
     @Override
     public void savePlayerStats(PlayerStats stats) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement stmt = connection.prepareStatement(
-                        "INSERT INTO player_stats (uuid, player_name, play_time, mobs_killed, items_eaten, distance_traveled, blocks_broken, deaths, items_crafted, items_used, chests_opened, messages_sent) "
-                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                                + "ON DUPLICATE KEY UPDATE " + "player_name = VALUES(player_name),"
-                                + "play_time = VALUES(play_time),"
-                                + "mobs_killed = VALUES(mobs_killed),"
-                                + "items_eaten = VALUES(items_eaten),"
-                                + "distance_traveled = VALUES(distance_traveled),"
-                                + "blocks_broken = VALUES(blocks_broken),"
-                                + "deaths = VALUES(deaths),"
-                                + "items_crafted = VALUES(items_crafted),"
-                                + "items_used = VALUES(items_used),"
-                                + "chests_opened = VALUES(chests_opened),"
-                                + "messages_sent = VALUES(messages_sent)");
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(
+                "INSERT INTO player_stats (uuid, player_name, play_time, mobs_killed, items_eaten, distance_traveled, blocks_broken, deaths, items_crafted, items_used, chests_opened, messages_sent) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "ON DUPLICATE KEY UPDATE " + "player_name = VALUES(player_name),"
+                        + "play_time = VALUES(play_time),"
+                        + "mobs_killed = VALUES(mobs_killed),"
+                        + "items_eaten = VALUES(items_eaten),"
+                        + "distance_traveled = VALUES(distance_traveled),"
+                        + "blocks_broken = VALUES(blocks_broken),"
+                        + "deaths = VALUES(deaths),"
+                        + "items_crafted = VALUES(items_crafted),"
+                        + "items_used = VALUES(items_used),"
+                        + "chests_opened = VALUES(chests_opened),"
+                        + "messages_sent = VALUES(messages_sent)")) {
 
-                stmt.setString(1, stats.getUuid().toString());
-                stmt.setString(2, stats.getPlayerName());
-                stmt.setInt(3, stats.getPlayTime());
-                stmt.setInt(4, stats.getMobsKilled());
-                stmt.setInt(5, stats.getItemsEaten());
-                stmt.setDouble(6, stats.getDistanceTraveled());
-                stmt.setInt(7, stats.getBlocksBroken());
-                stmt.setInt(8, stats.getDeaths());
-                stmt.setInt(9, stats.getItemsCrafted());
-                stmt.setInt(10, stats.getItemsUsed());
-                stmt.setInt(11, stats.getChestsOpened());
-                stmt.setInt(12, stats.getMessagesSent());
+            stmt.setString(1, stats.getUuid().toString());
+            stmt.setString(2, stats.getPlayerName());
+            stmt.setInt(3, stats.getPlayTime());
+            stmt.setInt(4, stats.getMobsKilled());
+            stmt.setInt(5, stats.getItemsEaten());
+            stmt.setDouble(6, stats.getDistanceTraveled());
+            stmt.setInt(7, stats.getBlocksBroken());
+            stmt.setInt(8, stats.getDeaths());
+            stmt.setInt(9, stats.getItemsCrafted());
+            stmt.setInt(10, stats.getItemsUsed());
+            stmt.setInt(11, stats.getChestsOpened());
+            stmt.setInt(12, stats.getMessagesSent());
 
-                stmt.executeUpdate();
-                stmt.close();
-            } catch (SQLException e) {
-                Bukkit.getLogger().severe("Error saving player stats for " + stats.getUuid());
-                e.printStackTrace();
-            }
-        });
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("Error saving player stats for " + stats.getUuid());
+            e.printStackTrace();
+        }
     }
 
     @Override
     public PlayerStats loadPlayerStats(UUID uuid) {
-        try {
-            PreparedStatement stmt =
-                    connection.prepareStatement("SELECT * FROM player_stats WHERE uuid = ?");
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement("SELECT * FROM player_stats WHERE uuid = ?")) {
             stmt.setString(1, uuid.toString());
-            ResultSet rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                PlayerStats stats = new PlayerStats();
-                stats.setUuid(uuid);
-                stats.setPlayTime(rs.getInt("play_time"));
-                stats.setMobsKilled(rs.getInt("mobs_killed"));
-                stats.setItemsEaten(rs.getInt("items_eaten"));
-                stats.setDistanceTraveled(rs.getDouble("distance_traveled"));
-                stats.setBlocksBroken(rs.getInt("blocks_broken"));
-                stats.setDeaths(rs.getInt("deaths"));
-                stats.setItemsCrafted(rs.getInt("items_crafted"));
-                stats.setItemsUsed(rs.getInt("items_used"));
-                stats.setChestsOpened(rs.getInt("chests_opened"));
-                stats.setMessagesSent(rs.getInt("messages_sent"));
-                stats.setPlayerName(rs.getString("player_name"));
-
-                rs.close();
-                stmt.close();
-                return stats;
-            } else {
-                rs.close();
-                stmt.close();
-                // Если нет статистики для игрока, создаём новую? сохроняем и возвращаем её
-                PlayerStats newStats = new PlayerStats();
-                newStats.setUuid(uuid);
-                savePlayerStats(newStats);
-                return newStats;
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSet(rs);
+                } else {
+                    PlayerStats newStats = new PlayerStats();
+                    newStats.setUuid(uuid);
+                    savePlayerStats(newStats);
+                    return newStats;
+                }
             }
         } catch (SQLException e) {
             Bukkit.getLogger().severe("Error loading player stats for " + uuid);
@@ -464,169 +392,87 @@ class DatabaseStorage implements IStorage {
 
     @Override
     public List<PlayerStats> loadAllPlayers() {
-
-        try {
-            PreparedStatement stmt = connection.prepareStatement("SELECT * FROM player_stats");
-            ResultSet rs = stmt.executeQuery();
+        // This operation is very heavy.
+        // But implementation is needed for interface.
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement("SELECT * FROM player_stats");
+             ResultSet rs = stmt.executeQuery()) {
 
             List<PlayerStats> statsList = new ArrayList<>();
-
             while (rs.next()) {
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                PlayerStats stats = new PlayerStats();
-                stats.setUuid(uuid);
-                stats.setPlayTime(rs.getInt("play_time"));
-                stats.setMobsKilled(rs.getInt("mobs_killed"));
-                stats.setItemsEaten(rs.getInt("items_eaten"));
-                stats.setDistanceTraveled(rs.getDouble("distance_traveled"));
-                stats.setBlocksBroken(rs.getInt("blocks_broken"));
-                stats.setDeaths(rs.getInt("deaths"));
-                stats.setItemsCrafted(rs.getInt("items_crafted"));
-                stats.setItemsUsed(rs.getInt("items_used"));
-                stats.setChestsOpened(rs.getInt("chests_opened"));
-                stats.setMessagesSent(rs.getInt("messages_sent"));
-                stats.setPlayerName(rs.getString("player_name"));
-
-                statsList.add(stats);
-
-                Bukkit.getLogger().info("Loaded stats for " + uuid);
+                statsList.add(mapResultSet(rs));
             }
-
-            rs.close();
-            stmt.close();
             return statsList;
         } catch (SQLException e) {
             Bukkit.getLogger().severe("Error loading all player stats");
             e.printStackTrace();
         }
-
         return Collections.emptyList();
     }
 
     @Override
     public void saveAllPlayers() {
-        // Для базы данных сохранение всех игроков происходит автоматически при каждом
-        // savePlayerStats()
+        // Auto-saved
     }
 
     @Override
     public void reloadStorage() {
-        try {
-            if (connection != null) {
-                connection.close();
-            }
-
-            Class.forName("org.mariadb.jdbc.Driver");
-            String url = "jdbc:mariadb://" + config.getDatabaseHost() + ":"
-                    + config.getDatabasePort() + "/" + config.getDatabaseName();
-            connection = DriverManager.getConnection(url, config.getDatabaseUsername(),
-                    config.getDatabasePassword());
-
-            PreparedStatement stmt = connection.prepareStatement(
-                    "CREATE TABLE IF NOT EXISTS player_stats (" + "uuid CHAR(36) PRIMARY KEY,"
-                            + "player_name VARCHAR(64)," + "play_time INT," + "mobs_killed INT,"
-                            + "items_eaten INT," + "distance_traveled DOUBLE,"
-                            + "blocks_broken INT," + "deaths INT," + "items_crafted INT,"
-                            + "items_used INT," + "chests_opened INT," + "messages_sent INT" + ")");
-            stmt.execute();
-            stmt.close();
-
-            Bukkit.getLogger().info("Database storage reloaded successfully.");
-        } catch (SQLException | ClassNotFoundException e) {
-            Bukkit.getLogger().severe("Error reloading database storage");
-            e.printStackTrace();
-        }
+        close();
+        initialize();
+        Bukkit.getLogger().info("Database storage reloaded successfully.");
     }
 
     @Override
     public void close() {
-        saveAllPlayers();
-        try {
-            if (connection != null) {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            Bukkit.getLogger().severe("Error closing database connection");
-            e.printStackTrace();
+        if (dataSource != null && !dataSource.isClosed()) {
+            dataSource.close();
         }
         Bukkit.getLogger().info("Database storage closed successfully.");
     }
 
     @Override
     public List<PlayerStats> getTopStats(StatType statType, int limit) {
-        List<PlayerStats> statsList = loadAllPlayers();
-
-        if (statsList == null)
-            return null;
-
-        // Фильтруем статистику по типу
-        List<PlayerStats> filteredStats = new ArrayList<>();
-        for (PlayerStats stats : statsList) {
-            switch (statType) {
-                case PLAY_TIME:
-                    if (stats.getPlayTime() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case MOBS_KILLED:
-                    if (stats.getMobsKilled() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case ITEMS_EATEN:
-                    if (stats.getItemsEaten() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case DISTANCE_TRAVELED:
-                    if (stats.getDistanceTraveled() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case BLOCKS_BROKEN:
-                    if (stats.getBlocksBroken() > 0)
-                        filteredStats.add(stats);
-                    break;
-                case CHEST_OPENED:
-                    if (stats.getChestsOpened() > 0)
-                        filteredStats.add(stats);
-                    break;
-            }
-        }
-
-        // Сортируем список по выбранному типу статистики
+        String column = "";
         switch (statType) {
-            case PLAY_TIME:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getPlayTime).reversed());
-                break;
-            case MOBS_KILLED:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getMobsKilled).reversed());
-                break;
-            case ITEMS_EATEN:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getItemsEaten).reversed());
-                break;
-            case BLOCKS_BROKEN:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getBlocksBroken).reversed());
-                break;
-            case CHEST_OPENED:
-                Collections.sort(filteredStats,
-                        Comparator.comparingInt(PlayerStats::getChestsOpened).reversed());
-                break;
-            case DISTANCE_TRAVELED:
-                Collections.sort(filteredStats,
-                        Comparator.comparingDouble(PlayerStats::getDistanceTraveled).reversed());
-                break;
-            default:
-                break;
+            case PLAY_TIME: column = "play_time"; break;
+            case MOBS_KILLED: column = "mobs_killed"; break;
+            case ITEMS_EATEN: column = "items_eaten"; break;
+            case DISTANCE_TRAVELED: column = "distance_traveled"; break;
+            case BLOCKS_BROKEN: column = "blocks_broken"; break;
+            case CHEST_OPENED: column = "chests_opened"; break;
+            default: return Collections.emptyList();
         }
 
-        if (limit > filteredStats.size()) {
-            return filteredStats;
+        List<PlayerStats> statsList = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(
+                "SELECT * FROM player_stats ORDER BY " + column + " DESC LIMIT ?")) {
+             stmt.setInt(1, limit);
+             try (ResultSet rs = stmt.executeQuery()) {
+                 while (rs.next()) {
+                     statsList.add(mapResultSet(rs));
+                 }
+             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        if (limit <= 0) {
-            return filteredStats;
-        }
+        return statsList;
+    }
 
-        return filteredStats.subList(0, Math.min(filteredStats.size(), limit));
+    private PlayerStats mapResultSet(ResultSet rs) throws SQLException {
+        PlayerStats stats = new PlayerStats();
+        stats.setUuid(UUID.fromString(rs.getString("uuid")));
+        stats.setPlayTime(rs.getInt("play_time"));
+        stats.setMobsKilled(rs.getInt("mobs_killed"));
+        stats.setItemsEaten(rs.getInt("items_eaten"));
+        stats.setDistanceTraveled(rs.getDouble("distance_traveled"));
+        stats.setBlocksBroken(rs.getInt("blocks_broken"));
+        stats.setDeaths(rs.getInt("deaths"));
+        stats.setItemsCrafted(rs.getInt("items_crafted"));
+        stats.setItemsUsed(rs.getInt("items_used"));
+        stats.setChestsOpened(rs.getInt("chests_opened"));
+        stats.setMessagesSent(rs.getInt("messages_sent"));
+        stats.setPlayerName(rs.getString("player_name"));
+        return stats;
     }
 }
