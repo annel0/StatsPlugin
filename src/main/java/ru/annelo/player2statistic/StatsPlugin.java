@@ -20,6 +20,7 @@ import java.util.UUID;
 public class StatsPlugin extends JavaPlugin {
     private IStorage storage;
     private Config config;
+    private StatsManager statsManager;
 
     @Override
     public void onEnable() {
@@ -35,94 +36,79 @@ public class StatsPlugin extends JavaPlugin {
                         ? new DatabaseStorage(config)
                         : new FileStorage(this);
 
+        statsManager = new StatsManager(this, storage);
+
         // Регистрация обработчиков событий
-        getServer().getPluginManager().registerEvents(new StatsListener(storage, config), this);
+        getServer().getPluginManager().registerEvents(new StatsListener(statsManager, config), this);
 
         // Регистрация команды
-        getCommand("stats").setExecutor(new StatsCommand(this, storage, config));
+        getCommand("stats").setExecutor(new StatsCommand(this, statsManager, config));
 
         // Запуск автосохранения
         if (config.isAutosaveEnabled()) {
             getServer().getScheduler().runTaskTimer(this, () -> {
-                storage.saveAllPlayers();
+                statsManager.saveAllCached();
                 getLogger().info("Данные успешно сохранены.");
             }, 0, config.getAutosaveInterval() * 20 * 60); // Интервал в тиках (20 тиков = 1 сек)
         }
-
-        // Загрузка данных при старте сервера
-        storage.loadAllPlayers();
     }
 
     @Override
     public void onDisable() {
         // Сохранение всех данных при выключении
+        if (statsManager != null) {
+            statsManager.saveAllCachedSync();
+        }
         if (storage != null) {
-            storage.saveAllPlayers();
+            storage.close();
         }
     }
     
     public void setStorage(IStorage storage) {
         this.storage = storage;
+        if (statsManager != null) {
+            statsManager.setStorage(storage);
+        }
     }
 
     public IStorage getStorage() {
         return this.storage;
+    }
+
+    public StatsManager getStatsManager() {
+        return statsManager;
     }
 }
 
 
 // Обработчик игровых событий
 class StatsListener implements Listener {
-    private final IStorage storage;
+    private final StatsManager statsManager;
     private final Config config;
 
-    private final Map<UUID, Long> playTimeMap = new HashMap<>();
-    // private final Map<UUID, Integer> lastItemEatMap = new HashMap<>();
-    // private final Map<UUID, Integer> lastBlockBreakMap = new HashMap<>();
-    // private final Map<UUID, Integer> lastChestOpenMap = new HashMap<>();
-    // private final Map<UUID, Integer> lastMessageSendMap = new HashMap<>();
-
-    public StatsListener(IStorage storage2, Config config) {
-        this.storage = storage2;
+    public StatsListener(StatsManager statsManager, Config config) {
+        this.statsManager = statsManager;
         this.config = config;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-        PlayerStats stats = storage.loadPlayerStats(uuid);
-        if (stats == null) {
-            stats = new PlayerStats();
-            stats.setUuid(uuid);
+        statsManager.createEmptyStats(uuid, event.getPlayer().getName());
+        statsManager.loadStats(uuid);
+
+        if (config.isEnablePlayTime()) {
+            statsManager.startSession(uuid);
         }
-
-        stats.setPlayerName(event.getPlayer().getName());
-
-        if (!config.isEnablePlayTime())
-            return;
-        // Запуск таймера игрового времени
-        playTimeMap.put(uuid, System.currentTimeMillis());
-
-        storage.savePlayerStats(stats);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        if (!config.isEnablePlayTime())
-            return;
-        // Сохранение игрового времени и других данных
         UUID uuid = event.getPlayer().getUniqueId();
-        if (playTimeMap.containsKey(uuid)) {
-            long playTime = (System.currentTimeMillis() - playTimeMap.get(uuid)) / 60000;
-            PlayerStats stats = storage.loadPlayerStats(uuid);
-            if (stats == null) {
-                playTimeMap.remove(uuid);
-                return;
-            }
-            stats.setPlayTime(stats.getPlayTime() + (int) playTime);
-            storage.savePlayerStats(stats);
-            playTimeMap.remove(uuid);
+        if (config.isEnablePlayTime()) {
+            statsManager.endSession(uuid);
         }
+        statsManager.unloadStats(uuid);
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -131,14 +117,8 @@ class StatsListener implements Listener {
             return;
 
         if (event.getEntity().getKiller() instanceof Player) {
-            // Увеличение счетчика убитых мобов
             Player killer = (Player) event.getEntity().getKiller();
-            PlayerStats stats = storage.loadPlayerStats(killer.getUniqueId());
-            if (stats == null) {
-                return;
-            }
-            stats.setMobsKilled(stats.getMobsKilled() + 1);
-            storage.savePlayerStats(stats);
+            statsManager.incrementMobsKilled(killer.getUniqueId());
         }
     }
 
@@ -146,14 +126,7 @@ class StatsListener implements Listener {
     public void onPlayerChat(AsyncChatEvent event) {
         if (!config.isEnableMessagesSent())
             return;
-
-        UUID uuid = event.getPlayer().getUniqueId();
-        PlayerStats stats = storage.loadPlayerStats(uuid);
-        if (stats == null) {
-            return;
-        }
-        stats.setMessagesSent(stats.getMessagesSent() + 1);
-        storage.savePlayerStats(stats);
+        statsManager.incrementMessagesSent(event.getPlayer().getUniqueId());
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -166,42 +139,29 @@ class StatsListener implements Listener {
             return;
         }
 
-        UUID uuid = event.getPlayer().getUniqueId();
-        PlayerStats stats = storage.loadPlayerStats(uuid);
-        if (stats == null) {
-            return;
-        }
         double distance = event.getFrom().distance(event.getTo());
-        if (distance <= 0) {
-            return;
+        if (distance > 0) {
+            statsManager.addDistanceTraveled(event.getPlayer().getUniqueId(), distance);
         }
-        stats.setDistanceTraveled(stats.getDistanceTraveled() + distance);
-        storage.savePlayerStats(stats);
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        PlayerStats stats = storage.loadPlayerStats(uuid);
-        if (stats == null) {
-            return;
-        }
-
-        // Проверка на правый клик и едимость предмета
-        if (event.getAction().name().contains("RIGHT_CLICK")) {
-            ItemStack item = event.getItem();
-            if (item != null && constants.edibleMaterials.contains(item.getType())
-                    && config.isEnableFoodConsumption()) {
-                stats.setItemsEaten(stats.getItemsEaten() + 1);
-                storage.savePlayerStats(stats);
-            }
-        }
-
         // Проверка на открытие сундука
         if (event.getClickedBlock() != null && event.getClickedBlock().getType() == Material.CHEST
                 && config.isEnableChestOpening()) {
-            stats.setChestsOpened(stats.getChestsOpened() + 1);
-            storage.savePlayerStats(stats);
+             if (event.getAction().name().contains("RIGHT_CLICK")) {
+                 statsManager.incrementChestsOpened(event.getPlayer().getUniqueId());
+             }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onPlayerItemConsume(PlayerItemConsumeEvent event) {
+        if (!config.isEnableFoodConsumption()) return;
+
+        if (constants.edibleMaterials.contains(event.getItem().getType())) {
+            statsManager.incrementItemsEaten(event.getPlayer().getUniqueId());
         }
     }
 
@@ -209,13 +169,6 @@ class StatsListener implements Listener {
     public void onPlayerBreakBlock(BlockBreakEvent event) {
         if (!config.isEnableBlockBreaking())
             return;
-
-        UUID uuid = event.getPlayer().getUniqueId();
-        PlayerStats stats = storage.loadPlayerStats(uuid);
-        if (stats == null) {
-            return;
-        }
-        stats.setBlocksBroken(stats.getBlocksBroken() + 1);
-        storage.savePlayerStats(stats);
+        statsManager.incrementBlocksBroken(event.getPlayer().getUniqueId());
     }
 }
